@@ -89,6 +89,10 @@ function bot() {
     else if (t === 'use') { const d = s.at(); if (d) pos = d.body ? d.body.position : d; e = s.hold ? true : G.tick % 8 < 4; near = 1.6; }
     else if (t === 'pick' || t === 'equip') { const d = s.at(); if (d) pos = d.body.position; e = G.tick % 12 === 0; }
     else if (t === 'reach') { pos = s.at(); near = .4; }
+    else if (t === 'ride') { pos = { x: G.elev ? G.elev.x : -3.5, z: 10.1 }; near = .2; }
+    else if (t === 'until') { const q = s.at && s.at(); if (q) pos = q.body ? q.body.position : q; a = G.tick % 20 < 10; }
+    // 지게차를 탄 채로는 부술 수 없으니 내린다
+    if (P.ride && t !== 'until') e = G.tick % 30 === 0;
   } else if (MS.phase === 'rampage' || R.mode === 'free') { a = true; b = G.tick % 50 < 2; let best = 1e9; for (const o of G.props) { if (o.hp == null || o.dead || o.fixed) continue; const d = Math.hypot(o.body.position.x - pp.x, o.body.position.z - pp.z); if (d < best) { best = d; pos = o.body.position; } } }
   I.a = a; I.b = b; I.e = e; I.jump = jump; I.c = G.rage >= 100 && MS.phase === 'rampage' && G.tick % 6 < 3;
   if (!pos) { I.mx = I.mz = 0; return; }

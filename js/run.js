@@ -3,9 +3,9 @@ import { S, save, copy, rankOf, RANKS } from './save.js';
 import { buildOffice, buildExterior, find, restock, setWallClock, elev, snapshotFloor, applyFloor, EX } from './world.js';
 import { later, slow, explode, shove, breakProp, settleFrags, setScreen, spawn } from './engine.js';
 import { P, I, CAM, spawnPlayer, updatePlayer, sit, standUp, setFace, camHold, camGlide, camTo, placeAt, throwCarry, equip, carry } from './player.js';
-import { FLOORS, FLOOR_IDS, buildFloor, floorName, floorLv } from './floors.js';
+import { FLOORS, FLOOR_IDS, FLOOR_LINES, FLOOR_GREET, buildFloor, floorName, floorLv } from './floors.js';
 import { tickToys, resetToys, TOY } from './toys.js';
-import { MISSIONS, MS, startMission, stopMission, tickMission, missionHud } from './missions.js';
+import { MISSIONS, MS, startMission, stopMission, tickMission, missionHud, rebind } from './missions.js';
 import { SETS, COMMON } from './data/lines.js';
 import { setTime } from './gfx.js';
 import * as fx from './fx.js';
@@ -41,13 +41,16 @@ export function preview(close) {
 function reset() {
   clearTimers(); hush(); ui.keysHint(false); Object.assign(G, { money: 0, counts: {}, nags: 0, maxCombo: 0, combo: 0, rage: 0, stress: 30, stressMax: 30, restocked: {}, clock: 0, toys: false, emit: null, onAlarm: null });
   R.t0 = Date.now(); R.co = copy(S.company); R.built = false; P.cheer = false; R.got = null; R.panel = false; resetToys(); ui.elev(null); ui.alarm(false);
+  R.cfloor = 'office'; R.csnap = {}; R.cwet = {};
 }
-function pickAlt(a, key) { const v = S[key] && a.includes(S[key]) ? a.find(x => x !== S[key]) : pick(a); S[key] = v; return v; }
+// 지난번과 다른 것 중에서 고른다
+function pickAlt(a, key) { const others = a.filter(x => x !== S[key]), v = pick(others.length ? others : a); S[key] = v; return v; }
 // 출근하기: 출근 → 오전 → 점심 → 오후 → 야근(사직서) → 건물 붕괴 → 청구서
 export function startCourse() {
   reset(); R.mode = 'run'; R.course = true; ui.only(null);
-  const am = pickAlt(['meeting', 'report'], 'lastAm'), pm = pickAlt(['printer', 'overtime'], 'lastPm'); save();
-  R.list = [...(S.skipArrive ? [] : ['arrive']), am, 'lunch', pm, 'resign']; R.i = 0; G.dayList = R.list;
+  // 오전 = 회의·보고서·12층 임원 보고, 점심 = 탕비실·1층 카페, 오후 = 복합기·퇴근 5분 전·B2 사장님 차
+  const am = pickAlt(['meeting', 'report', 'exec'], 'lastAm'), lu = pickAlt(['lunch', 'cafe'], 'lastLunch'), pm = pickAlt(['printer', 'overtime', 'valet'], 'lastPm'); save();
+  R.list = [...(S.skipArrive ? [] : ['arrive']), am, lu, pm, 'resign']; R.i = 0; G.dayList = R.list;
   if (R.list[0] === 'arrive') prologue(); else goMission();
 }
 export function startSingle(id) { reset(); R.mode = 'run'; R.course = false; R.list = [id]; R.i = 0; G.dayList = R.list; ui.only(null); goMission(); }
@@ -79,10 +82,12 @@ function restockLines(b) {
 }
 function setup(id) {
   const m = MISSIONS[id]; let pre = [];
-  stopMission(); fx.clearFxSoft(); ui.over(''); P.cheer = false;
+  stopMission(); fx.clearFxSoft(); ui.over(''); P.cheer = false; G.toys = false;
   G.clock = m.clock[0] * 60 + m.clock[1];
-  if (!R.course || !R.built) { buildOffice(R.co, m.sky); R.built = true; spawnPlayer(S.char, 0, 2, Math.PI); }
+  if (!R.course || !R.built) { buildOffice(R.co, m.sky); R.built = true; R.cfloor = 'office'; R.csnap = {}; R.cwet = {}; resetToys(); spawnPlayer(S.char, 0, 2, Math.PI); }
   else {
+    // 다른 층에서 끝났으면 우리 층으로 돌아온다(그 층은 부순 채로 기억해 둔다)
+    if (R.cfloor !== 'office') courseFloor('office', m.sky);
     // 사무실은 다시 짓지 않는다. 이번 상황에 꼭 필요한 것만 총무팀이 다시 들여놓는다
     settleFrags(); setTime(m.sky);
     if (P.carry) throwCarry(true); if (P.seated) standUp(); P.atk = null; P.slam = false; P.rush = P.storm = 0;
@@ -103,13 +108,30 @@ function setup(id) {
   ui.objectives(m.steps.filter(s => !s.hide).map(s => s.t), 0);
   R.pre = pre; music(G.bgmBase);
 }
+// ───── 상황 중 층 옮기기: 지금 층을 기억해 두고 다른 층을 지은 뒤(전에 왔던 층이면 부순 채로) 엘리베이터에서 걸어 나온다
+function courseFloor(to, sky) {
+  const keep = { weapon: P.weapon, wdur: P.wdur, fuel: P.fuel }, mult = G.mult;
+  if (P.carry && P.carry !== true) throwCarry(true);
+  R.csnap[R.cfloor] = snapshotFloor(); R.cwet[R.cfloor] = TOY.wet; resetToys();
+  if (to === 'office') buildOffice(R.co, sky); else buildFloor(to, R.co, sky);
+  applyFloor(R.csnap[to]); TOY.wet = !!R.cwet[to]; R.cfloor = to; G.mult = mult;
+  spawnPlayer(S.char, EX, 9.95, Math.PI);
+  if (keep.weapon) { equip(keep.weapon, { fuel: keep.fuel }); P.wdur = keep.wdur; }
+  G.onTick = playTick; rebind();
+}
+G.rideTo = (to, done) => {
+  const m = MISSIONS[R.list[R.i]];
+  P.lock = 9999; P.auto = null; elev(false); sfx('ding');
+  after(650, () => timeCut(floorLv(to), FLOORS[to].n, () => { courseFloor(to, m ? m.sky : 'day'); P.lock = 9999; camHold([EX + 2.3, 1.75, 4.9], [EX, 1.15, 9.2]); },
+    () => { P.lock = 0; elev(true); sfx('ding'); P.auto = { x: EX, z: 6.8, spd: 1.8 }; after(1500, () => { if (R.mode === 'run' && CAM.mode === 'hold') camTo('follow', .7); }); done(); }));
+};
 function begin(id) {
   startMission(MISSIONS[id], R.co, ui.charName(S.char), missionEnd, R.pre);
   if (R.i === 0 && id !== 'arrive' && !S.seenHelp) { ui.keysHint(true); after(12000, () => ui.keysHint(false)); }
   if (id === 'arrive' || R.i === 0) { S.seenHelp = true; save(); }
 }
 function playTick(dt) {
-  updatePlayer(dt); tickMission(dt);
+  updatePlayer(dt); tickToys(dt); tickMission(dt);
   if (MS.phase !== 'idle') G.clock += dt / 3;
   if (G.tick % 6 === 0) { const h = missionHud(); ui.hud({ title: R.label, sub: R.sub || '', money: G.money, stress: G.stress, combo: G.combo, rage: G.rage, clock: fmtClock(G.clock), time: h.left != null ? '자유 난동 ' + h.left + '초 · 피해액 2배' : '', weapon: weaponLabel() }); promptTick(); }
   if (G.tick % 30 === 0) setWallClock(G.clock);
@@ -204,6 +226,7 @@ function enterFloor(id) {
   G.onBreak = p => { track('break:' + p.type); if (p.tag) track('tag:' + p.tag); };
   G.onOut = p => { track('out'); track('out:' + p.type); if (p.tag) track('outtag:' + p.tag); };
   G.onTick = freeTick; goalsHud();
+  const gr = FLOOR_GREET[id]; if (gr) after(2600, () => { if (R.mode === 'free' && R.floor === id) say(gr[0], gr[1]); });
 }
 function freeTick(dt) {
   updatePlayer(dt); tickToys(dt);
@@ -216,7 +239,8 @@ function freeTick(dt) {
     const show = inCab && R.cabArm && !P.ride;
     if (show !== R.panel) { R.panel = show; ui.elev(show ? { cur: R.floor, floors: FLOOR_IDS.map(id => ({ id, lv: FLOORS[id].lv, n: FLOORS[id].n })) } : null); }
   }
-  if (G.tick % 620 === 300 && R.floor !== 'parking') say(R.co.who, pick(R.lines).replace('{who}: ', '').replace('{who}', R.co.who));
+  // 층마다 들리는 소리: 우리 팀은 회사 설정의 잔소리, 다른 층은 그 층 사람·방송
+  if (G.tick % 620 === 300) { const fl = FLOOR_LINES[R.floor]; if (fl) { const [w, t] = pick(fl); say(w, t); } else say(R.co.who, pick(R.lines).replace('{who}: ', '').replace('{who}', R.co.who)); }
   if (G.tick % 900 === 450) { const ph = G.props.filter(p => p.type === 'phone' && !p.dead); if (ph.length) { const p = pick(ph); sfx('ring'); p.punch = 10; fx.text({ x: p.body.position.x, y: p.body.position.y + .4, z: p.body.position.z }, '따르릉!', 'note'); } }
 }
 // 층 바꾸기: 문 닫힘 → 층 숫자 → 그 층을 다시 짓고(부순 기록을 입혀) → 문 열림. 든 무기·물건은 같이 간다

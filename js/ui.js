@@ -4,7 +4,7 @@ import { SETS, WHOS, MOTTOS } from './data/lines.js';
 import { G, won } from './state.js';
 import { sfx } from './audio.js';
 import { refreshMusic } from './music.js';
-import { FLOORS, FLOOR_IDS } from './floors.js';
+import { FLOORS, FLOOR_IDS, floorLv } from './floors.js';
 
 export const act = {};
 const $ = id => document.getElementById(id);
@@ -42,7 +42,7 @@ export function showTitle() {
 function showPick(missions, ids) {
   only('s-pick'); const box = $('pk-list'); box.textContent = '';
   for (const id of [...ids, 'resign']) {
-    const m = missions[id], b = el('button', 'pk'); b.appendChild(el('small', '', act.clock(m.clock[0] * 60 + m.clock[1]))); b.appendChild(el('b', '', m.n)); b.appendChild(el('span', '', m.sub + ' · ' + m.steps.filter(s => !s.hide).length + '단계'));
+    const m = missions[id], b = el('button', 'pk'); b.appendChild(el('small', '', (m.floor ? floorLv(m.floor) : '7층') + ' · ' + act.clock(m.clock[0] * 60 + m.clock[1]))); b.appendChild(el('b', '', m.n)); b.appendChild(el('span', '', m.sub + ' · ' + m.steps.filter(s => !s.hide).length + '단계'));
     b.onclick = () => act.single(id); box.appendChild(b);
   }
 }
@@ -164,10 +164,11 @@ export function objectives(list, idx, hint) {
 }
 let pBusy = false;
 export const promptBusy = () => pBusy;
-export function prompt(text, prog = 0, wait) {
+// wait = 참는 중(막대만), plain = 키 표시도 막대도 없는 안내(엘리베이터 들어가기 등)
+export function prompt(text, prog = 0, wait, plain) {
   const p = $('prompt'); pBusy = !!text; if (!text) { if (!p.classList.contains('soft')) show('prompt', false); return; }
-  show('prompt', true); p.classList.remove('soft'); p.firstElementChild.textContent = wait ? text : (G.mobile ? '[행동] ' : '[E] ') + text;
-  const b = p.lastElementChild; b.style.display = prog > 0 || wait ? 'block' : 'none'; b.firstElementChild.style.width = Math.min(100, prog * 100) + '%';
+  show('prompt', true); p.classList.remove('soft'); p.firstElementChild.textContent = wait || plain ? text : (G.mobile ? '[행동] ' : '[E] ') + text;
+  const b = p.lastElementChild; b.style.display = !plain && (prog > 0 || wait) ? 'block' : 'none'; b.firstElementChild.style.width = Math.min(100, prog * 100) + '%';
 }
 export function hint(text, prog = 0) {
   const p = $('prompt'); if (pBusy) return; if (!text) { show('prompt', false); p.classList.remove('soft'); return; }

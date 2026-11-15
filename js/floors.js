@@ -51,6 +51,13 @@ export const FLOORS = {
   },
 };
 export const FLOOR_IDS = ['exec', 'office', 'lobby', 'parking'];
+// 자유 난동 중 층마다 들리는 소리(사무실은 회사 설정의 잔소리를 쓴다)와 도착 인사
+export const FLOOR_LINES = {
+  exec: [['사장님', '요즘 젊은 친구들은 말이야…'], ['비서', '사장님 결재 서류 올라갑니다.'], ['전무님', '이번 분기 숫자가 왜 이래?'], ['사장님', '우리 회사는 가족 같은 회사야.'], ['비서', '사장님, 1시 골프 약속 잡혀 있습니다.'], ['전무님', '그건 사장님 생각이 아니고 내 생각이야.']],
+  lobby: [['안내 방송', '오늘도 고객 감동을 실천합시다.'], ['보안 요원', '사원증 패용 부탁드립니다.'], ['카페', '주문하신 아아 12잔 나왔습니다~'], ['안내 방송', '로비에서는 정숙해 주시기 바랍니다.'], ['보안 요원', '거기 뛰지 마세요!'], ['안내 방송', '엘리베이터 정기 점검이 예정되어 있습니다.']],
+  parking: [['주차 관리', '사장님 전용 구역은 주차 금지입니다.'], ['경비실 방송', '이중 주차 차량은 이동 바랍니다.'], ['주차 관리', '출구 쪽은 서행해 주십시오.'], ['경비실 방송', '차량 경보가 울리고 있습니다. 차주분은 확인 바랍니다.'], ['주차 관리', '지게차는 허가받은 분만 운전하세요.']],
+};
+export const FLOOR_GREET = { exec: ['비서', '임원층입니다. 사장님 계시니 조용히 다니세요.'], lobby: ['안내 방송', '1층 로비입니다. 오늘도 좋은 하루 되세요.'], parking: ['주차 관리', '지하 2층입니다. 사장님 차 근처는 조심하세요.'] };
 export const floorLv = id => FLOORS[id].lv === 'B2' ? 'B2' : FLOORS[id].lv + '층';
 export const floorName = id => floorLv(id) + ' ' + FLOORS[id].n;
 
@@ -114,8 +121,8 @@ export function buildExec(co, time = 'day') {
   [-2.7, -.9, .9, 2.7].forEach((dx, i) => on(bt, 'laptop', dx, i % 2 ? .45 : -.45, { ry: i % 2 ? PI : 0 }));
   [-3, -1.8, -.6, .6, 1.8, 3].forEach((dx, i) => on(bt, 'bottle', dx, i % 2 ? .18 : -.18, { col: '#9fd8ff' }));
   [-2.25, 0, 2.25].forEach(dx => on(bt, 'binder', dx, .05, { ry: .3 }));
-  ['상무', '전무', '부사장', '사장'].forEach((t, i) => on(bt, 'nameplate', -2.4 + i * 1.6, -.6, { text: t }));
-  for (const x of [5.2, 6.1, 7.0, 7.9, 8.8, 9.7, 10.6]) { put('chair', x, -5.45); put('chair', x, -2.95, { ry: PI }); }
+  ['상무', '전무', '부사장', '사장'].forEach((t, i) => on(bt, 'nameplate', -2.4 + i * 1.6, -.6, { text: t, tag: t === '사장' ? 'boardPlate' : undefined }));
+  let bc = 0; for (const x of [5.2, 6.1, 7.0, 7.9, 8.8, 9.7, 10.6]) { put('chair', x, -5.45, { tag: 'bc' + bc++ }); put('chair', x, -2.95, { ry: PI, tag: 'bc' + bc++ }); }
   put('chair', 11.65, -4.2, { ry: -PI / 2, boss: true }); put('chair', 4.15, -4.2, { ry: PI / 2 });
   hang('tv', 13.95, 1.7, -4.2, -PI / 2, { tag: 'boardTv', screen: 'slide' }); hang('projector', 7.9, H - .25, -4.2, PI / 2);
   put('whiteboard', 2.6, -8.3, { ry: .5 }); put('bigplant', 13.3, -8.4); put('bigplant', 13.3, .85);
@@ -158,7 +165,7 @@ export function buildLobby(co, time = 'day') {
   put('chair', 6.8, 2.85, { ry: PI }); put('hammer', 8.6, 3.5, { ry: .4, tag: 'hammer' }); put('kiosk', 4.9, -1.6, { ry: .35 });
   // 회사 카페
   const cc = put('cafecounter', -11.1, -1.6, { ry: PI / 2, tag: 'cafeCounter' });
-  on(cc, 'coffee', -.75, -.05, { ry: PI, size: [.62, .46, .5], price: 6000000 }); on(cc, 'coffee', .25, -.05, { ry: PI, size: [.62, .46, .5], price: 6000000 });
+  on(cc, 'coffee', -.75, -.05, { ry: PI, size: [.62, .46, .5], price: 6000000, tag: 'esp0' }); on(cc, 'coffee', .25, -.05, { ry: PI, size: [.62, .46, .5], price: 6000000, tag: 'esp1' });
   on(cc, 'monitor', 1.15, .12, { screen: 'pos' }); [-1.3, -1.15, .95].forEach(dx => on(cc, 'mug', dx, .2));
   put('showcase', -11.15, .7, { ry: PI / 2, tag: 'showcase' });
   const back = put('counter', -13.65, -1.6); on(back, 'microwave', 0, -.6, { ry: PI / 2 }); [-.1, .1, .3, .5, .7, .9].forEach((dz, k) => on(back, 'mug', k % 2 ? .1 : -.08, dz)); on(back, 'coffee', 0, -1.05, { ry: PI / 2 });
@@ -213,7 +220,7 @@ export function buildParking(co) {
   for (const x of [-8, 0, 8]) for (const z of [-3.6, 3.6]) { solid(x, H / 2, z, .7, H, .7, 'concreteWall'); bx(L, .72, .55, .72, 'hazard', x, .275, z).castShadow = false; for (const s of [-1, 1]) pl(L, .4, .3, textMat('B2', { w: 128, h: 96, size: 70, bg: '#2f6bff', fg: '#ffffff' }), x, 1.6, z + s * .356, s < 0 ? PI : 0); }
   // 북쪽 줄: 사장님 차 · 임원 차 · 직원 차 (뒤로 대 놓아 앞이 통로 쪽)
   car(-5, -6.6, { col: '#111317', price: 150000000, plate: '01가 0001', tag: 'bossCar' });
-  hang('banner', -5, 2.05, -8.98, 0, { text: '사장님 전용', size: [2.2, .42, .03] }); put('cone', -6.5, -3.95); put('cone', -3.5, -3.95);
+  hang('banner', -5, 2.05, -8.98, 0, { text: '사장님 전용', size: [2.2, .42, .03] }); put('cone', -6.5, -3.95); put('cone', -3.5, -3.95); put('bucket', -6.3, -3.3, { tag: 'bucket' });
   car(-2.5, -6.6, { col: '#b9bec4', price: 70000000, plate: '12가 1004' });
   car(2.5, -6.6, { col: '#eceeef', price: 60000000, plate: '34나 2580' });
   car(7.5, -6.6, { col: '#22355e', price: 55000000, plate: '56다 7777' });

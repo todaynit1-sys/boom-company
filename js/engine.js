@@ -138,7 +138,7 @@ function toDebris(p) {
   fx.debris(p, c);
 }
 export function settleFrags() { for (const p of G.props) if (p.type === 'frag' && !p.dead) { toDebris(p); kill(p); } flush(); }
-function flush() {
+export function flush() {
   if (!G.removeQ.length) return;
   for (const p of G.removeQ) { PH.world.removeBody(p.body); X.level.remove(p.g); if (p.type === 'frag' && !p.counted) fragN--; }
   G.removeQ = []; G.props = G.props.filter(p => !p.dead);
@@ -185,6 +185,7 @@ function spill(p) {
     else if (k === 'cream') { fx.bitsAt(pos, n, '#fff3df', 3.5, 3); fx.bitsAt(pos, n >> 1, '#e0303f', 3, 3); fx.stain(b.x, b.z, .6, '#f3e2c6', .6); }
     else if (k === 'cans') { for (const cc of ['#c9281f', '#2f6bff', '#ffd84d', '#2a8a45']) fx.bitsAt(pos, n >> 2, cc, 4, 4); }
     else if (k === 'coins') fx.bitsAt(pos, n, '#e3b23c', 3.5, 4);
+    else if (k === 'cups') { fx.bitsAt(pos, n, '#ffffff', 4, 4); fx.bitsAt(pos, n, '#cfe9ff', 3, 3); }
   }
 }
 export function explode(c, r, dmg, push) {

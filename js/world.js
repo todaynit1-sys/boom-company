@@ -1,4 +1,4 @@
-import { resetWorld, solid, spawn, kill, release, setScreen, settleFrags, GR, PH, CANNON } from './engine.js';
+import { resetWorld, solid, spawn, kill, release, setScreen, settleFrags, flush, GR, PH, CANNON } from './engine.js';
 import { THREE, X, M, bx, pl, textMat, setTime } from './gfx.js';
 import { DEFS } from './data/props.js';
 import { G, rand, pick, clamp } from './state.js';
@@ -54,9 +54,11 @@ export function snapshotFloor(carried) {
 export function applyFloor(s) {
   if (!s) return;
   const gone = new Set(s.gone), rec = new Map(s.live.map(r => [r[0], r]));
+  // 없어진 것은 바로 치워야 그 자리에 다시 들여놓는 물건과 겹치지 않는다
+  for (const p of G.props) if (p.seq != null && gone.has(p.seq)) kill(p);
+  flush();
   for (const p of G.props.slice()) {
     if (p.seq == null) continue;
-    if (gone.has(p.seq)) { kill(p); continue; }
     const r = rec.get(p.seq); if (!r) continue;
     if (p.fixed && !r[9]) release(p);
     const b = p.body; b.position.set(r[1], r[2], r[3]); b.quaternion.set(r[4], r[5], r[6], r[7]); b.velocity.set(0, 0, 0); b.angularVelocity.set(0, 0, 0);
