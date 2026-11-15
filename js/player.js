@@ -6,8 +6,9 @@ import { THREE, X, M, bx, colorMat, textMat, pl, canvasTex, speckle, labelMat, b
 import { CANNON, PH, GR, attack, damage, spawn, shove, explode, later, slow, addCombo, kill, distTo } from './engine.js';
 import * as fx from './fx.js';
 import { sfx, buzz } from './audio.js';
+import { mount, updateRide, sprayTick, useProp, TOY } from './toys.js';
 
-export const I = { mx: 0, mz: 0, jump: false, a: false, b: false, c: false, e: false, lookX: 0, lookY: 0 };
+export const I ={ mx: 0, mz: 0, jump: false, a: false, b: false, c: false, e: false, lookX: 0, lookY: 0 };
 export const P = { active: false };
 export const CAM = { yaw: 0, pitch: .28, dist: 4.3, mode: 'follow', t: 0, look: new THREE.Vector3(0, 1, 0) };
 const FIST = { n: '맨손', dmg: 10, r: .75, reach: .7, push: 3, cd: 210, snd: 'punch' };
@@ -282,6 +283,7 @@ export function poseRig(R, st) {
   if (st.air) { R.hipL.rotation.x = -.6; R.hipR.rotation.x = -.15; R.kneeL.rotation.x = 1.0; R.kneeR.rotation.x = .55; R.shL.rotation.z = .55; R.shR.rotation.z = -.55; }
   if (st.slam) { R.spine.rotation.x = .45; R.shL.rotation.set(-2.7, 0, .2); R.shR.rotation.set(-2.7, 0, -.2); fL = fR = 1.6; }
   if (st.carry) { R.shL.rotation.set(-2.95, 0, .28); R.shR.rotation.set(-2.95, 0, -.28); R.elL.rotation.x = -.15; R.elR.rotation.x = -.15; fL = fR = 1.2; }
+  if (st.push) { R.shL.rotation.set(-1.25, 0, .12); R.shR.rotation.set(-1.25, 0, -.12); R.elL.rotation.x = -.4; R.elR.rotation.x = -.4; R.spine.rotation.x = .22; fL = fR = 1.3; }
   if (st.cheer) { const b = Math.sin(t * .25); R.shL.rotation.set(-2.85 + b * .08, 0, .5); R.shR.rotation.set(-2.85 - b * .08, 0, -.5); R.elL.rotation.x = -.25; R.elR.rotation.x = -.25; fL = fR = 1.6; R.head.rotation.x = -.18; }
   if (st.relief && !st.seated && !st.cheer) { R.spine.rotation.x = -.1; R.head.rotation.x = -.22; R.shL.rotation.set(.1, 0, .16); R.shR.rotation.set(.1, 0, -.16); R.elL.rotation.x = -.1; R.elR.rotation.x = -.1; }
   const a = st.atk;
@@ -306,7 +308,7 @@ export function poseRig(R, st) {
 
 // ───── 생성·자리
 const rigs = {};
-function setMask() { if (P.body) P.body.collisionFilterMask = (P.seated || P.ghost > 0) ? (GR.STATIC | GR.PWALL) : (GR.STATIC | GR.PROP | GR.PWALL); }
+function setMask() { if (P.body) P.body.collisionFilterMask = (P.seated || P.ghost > 0 || P.ride) ? (GR.STATIC | GR.PWALL) : (GR.STATIC | GR.PROP | GR.PWALL); }
 export function spawnPlayer(id, x, z, yaw = 0) {
   const g = (S.gender && S.gender[id]) || CHARS[id].g || 'm', key = id + '|' + (S.acc || '') + '|' + g;
   const R = rigs[key] || (rigs[key] = buildRig(id, S.acc, g));
@@ -316,7 +318,7 @@ export function spawnPlayer(id, x, z, yaw = 0) {
   const body = new CANNON.Body({ mass: 70, material: PH.matP, fixedRotation: true, allowSleep: false, collisionFilterGroup: GR.PLAYER, collisionFilterMask: GR.STATIC | GR.PROP | GR.PWALL });
   body.addShape(new CANNON.Sphere(.3), new CANNON.Vec3(0, .3, 0)); body.addShape(new CANNON.Sphere(.3), new CANNON.Vec3(0, .9, 0));
   body.position.set(x, .02, z); body.isPlayer = true; body.updateMassProperties(); PH.world.addBody(body);
-  Object.assign(P, { id, ch: CHARS[id], R, body, yaw, walk: 0, speed: 0, atk: null, cdB: 0, n3: 0, air: 0, jumps: 0, slam: false, rush: 0, storm: 0, carry: null, weapon: null, wdef: null, wdur: 0, wmesh: null, lock: 0, pj: false, pb: false, pc: false, pe: false, pa: false, eHold: 0, active: true, t: 0, onG: true, cand: null, seated: null, ghost: 0, auto: null, cheer: false, expr: 'normal', blinkT: 2.5, tremble: 0, look: 0 });
+  Object.assign(P, { id, ch: CHARS[id], R, body, yaw, walk: 0, speed: 0, atk: null, cdB: 0, n3: 0, air: 0, jumps: 0, slam: false, rush: 0, storm: 0, carry: null, weapon: null, wdef: null, wdur: 0, wmesh: null, lock: 0, pj: false, pb: false, pc: false, pe: false, pa: false, eHold: 0, active: true, t: 0, onG: true, cand: null, seated: null, ghost: 0, auto: null, cheer: false, expr: 'normal', blinkT: 2.5, tremble: 0, look: 0, ride: null, fuel: 0, spraying: false, flyT: 0, flew: false });
   CAM.yaw = yaw + Math.PI; CAM.pitch = .28; CAM.mode = 'follow';
   R.root.visible = true; R.root.position.set(x, 0, z); R.root.rotation.y = yaw;
 }
@@ -339,17 +341,18 @@ export function standUp() {
 export function setFace(e) { P.expr = e; }
 export function tremble() { P.tremble = 12; }
 
-export function equip(type) {
+export function equip(type, from) {
   dropWeapon();
   const def = DEFS[type]; P.weapon = type; P.wdef = def.weapon; P.wdur = def.weapon.dur || 0;
+  P.fuel = def.weapon.spray ? (from && from.fuel != null ? from.fuel : 100) : 0;
   const g = new THREE.Group(); def.build(g, {}, def.size); g.position.set(0, 0, def.size[2] * .36); const holder = new THREE.Group(); holder.add(g); holder.position.set(0, -.07, 0); P.R.handR.add(holder); P.wmesh = holder;
   sfx('up', .6); fx.text(headPos(.5), def.weapon.n + ' 장착!', 'note');
 }
 export function dropWeapon(broke) {
   if (!P.weapon) return; P.R.handR.remove(P.wmesh);
   const p = P.body.position;
-  if (!broke) spawn(P.weapon, p.x + Math.sin(P.yaw) * .5, .6, p.z + Math.cos(P.yaw) * .5, { ry: rand(6.28) });
-  P.weapon = null; P.wdef = null; P.wmesh = null;
+  if (!broke) spawn(P.weapon, p.x + Math.sin(P.yaw) * .5, .6, p.z + Math.cos(P.yaw) * .5, P.wdef && P.wdef.spray ? { ry: rand(6.28), fuel: P.fuel } : { ry: rand(6.28) });
+  P.weapon = null; P.wdef = null; P.wmesh = null; P.fuel = 0; P.spraying = false;
 }
 const headPos = (dy = 0) => ({ x: P.body.position.x, y: P.body.position.y + 1.85 + dy, z: P.body.position.z });
 const fwd = () => ({ x: Math.sin(P.yaw), z: Math.cos(P.yaw) });
@@ -372,6 +375,7 @@ export function flipProp(p) {
   damage(p, p.maxHp * .3, b.position, true); const gain = 200000 * G.mult; G.money += gain; addCombo(3); G.rage = Math.min(100, G.rage + 12);
   fx.text({ x: b.position.x, y: b.position.y + 1.2, z: b.position.z }, '와르르!', 'word big'); fx.text({ x: b.position.x, y: b.position.y + 1.6, z: b.position.z }, '엎기 +' + Math.round(gain).toLocaleString('ko-KR') + '원', 'money');
   sfx('wood'); sfx('boom', .6); G.shake = .3; G.hitstop = 70; buzz(50); P.atk = { type: 'smash', t: .3, dur: .4, hit: true };
+  if (G.emit) { G.emit('flip'); G.emit('flip:' + p.type); }
 }
 
 // E로 집거나 엎을 수 있는 가장 가까운 물건
@@ -379,8 +383,11 @@ function findCand() {
   const pp = P.body.position, f = fwd(), c = { x: pp.x + f.x * .7, y: .9, z: pp.z + f.z * .7 }; let best = null, bd = 1.5;
   if (G.want && !G.want.dead && !G.want.held && distTo(G.want, c, .9) < 1.9) return G.want;
   for (const p of G.props) {
-    if (p.dead || p.kind !== 'obj' || p.fixed || p.held || p === P.seated) continue; const def = p.def;
-    const can = def.weapon || def.flip || (def.grab !== false && p.body.mass <= 25); if (!can) continue;
+    if (p.dead || p.kind !== 'obj' || p.held || p === P.seated) continue; const def = p.def;
+    // 비상벨처럼 벽에 붙은 것은 누를 수만 있다. 탈것은 자유 난동에서만
+    if (p.fixed && !def.use) continue;
+    const ride = def.ride && G.toys;
+    const can = def.use || def.weapon || def.flip || ride || (def.grab !== false && p.body.mass <= 25); if (!can) continue;
     const d = distTo(p, c, .7) + (def.weapon ? -.4 : 0) + (def.flip ? .25 : 0); if (d < bd) { bd = d; best = p; }
   }
   return best;
@@ -417,6 +424,8 @@ function special() {
   else if (sp.type === 'rain') for (let i = 0; i < 11; i++) later(6 + i * 7, () => { const q = P.body.position, c = { x: clamp(q.x + rand(-6, 6), -13, 13), y: .4, z: clamp(q.z + rand(-6, 6), -8, 8) }; fx.sheet({ x: c.x, y: 2.4, z: c.z }, 6, '#ffffff', 2); explode(c, 3, 55, 9); fx.cloud(c, 6, '#ffffff', 1, .6); sfx('boom', .7); });
 }
 
+// 든 물건은 머리 위에 붙어 다닌다
+function holdCarry(pp) { if (!P.carry || P.carry === true) return; const c = P.carry; if (c.dead) { P.carry = null; return; } const cb = c.body; cb.position.set(pp.x, pp.y + 1.95 + c.size[1] / 2, pp.z); cb.velocity.set(0, 0, 0); cb.angularVelocity.set(0, 0, 0); cb.quaternion.setFromEuler(0, P.yaw, 0); }
 const rayFrom = new CANNON.Vec3(), rayTo = new CANNON.Vec3(), rayRes = new CANNON.RaycastResult();
 export function updatePlayer(dt) {
   if (!P.active) return;
@@ -429,6 +438,8 @@ export function updatePlayer(dt) {
   let lk = 0; if (G.lookAt && !P.seated) { const t = Math.atan2(G.lookAt.x - pp.x, G.lookAt.z - pp.z); let d = t - P.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); lk = clamp(d, -.7, .7); }
   P.look = lerp(P.look, lk, .08);
   const done = () => { P.pj = I.jump; P.pa = I.a; P.pb = I.b; P.pc = I.c; P.pe = I.e; };
+  // 바퀴의자·카트·지게차를 탄 동안에는 운전만 한다
+  if (P.ride) { updateRide(dt, locked); P.cand = null; done(); return; }
   // 앉아 있을 때: 움직이거나 때리면 일어난다. E는 할 일에만 쓴다
   if (P.seated) {
     const c = P.seated;
@@ -453,12 +464,14 @@ export function updatePlayer(dt) {
     if (d > .06) { const s = Math.min(a.spd || 1.4, d * 5); v.x = dx / d * s; v.z = dz / d * s; P.yaw = angLerp(P.yaw, Math.atan2(dx, dz), .18); }
     else { v.x = v.z = 0; if (a.face != null) P.yaw = angLerp(P.yaw, a.face, .15); if (a.face == null || Math.abs(Math.atan2(Math.sin(a.face - P.yaw), Math.cos(a.face - P.yaw))) < .04) P.auto = a.then || null; }
     const hs = Math.hypot(v.x, v.z); P.speed = lerp(P.speed, clamp(hs / 5.5, 0, 1.2), .25); if (hs > .3) P.walk += hs * dt * 2.6;
-    done(); return;
+    holdCarry(pp); done(); return;
   }
   let mx = locked ? 0 : I.mx, mz = locked ? 0 : I.mz; const l = Math.hypot(mx, mz); if (l > 1) { mx /= l; mz /= l; }
   const a = aim(), wx = a.x * mz + Math.cos(CAM.yaw) * mx, wz = a.z * mz - Math.sin(CAM.yaw) * mx;
   const spd = ch.spd * (P.rush > 0 ? 1.7 : 1) * (P.carry ? .85 : 1) * (P.slam ? .2 : 1) * (P.atk && P.atk.k === 'b' ? .35 : 1);
-  v.x = lerp(v.x, wx * spd, .3); v.z = lerp(v.z, wz * spd, .3);
+  // 소화기를 뿜는 동안엔 반동에 밀리고, 스프링클러로 젖은 바닥에서는 미끄러진다
+  const grip = P.spraying ? .04 : TOY.wet && onG ? .08 : .3;
+  v.x = lerp(v.x, wx * spd, grip); v.z = lerp(v.z, wz * spd, grip);
   if (l > .1) P.yaw = angLerp(P.yaw, Math.atan2(wx, wz), .25);
   if (onG) {
     if (P.slam) { P.slam = false; const hits = attack({ x: pp.x, y: .4, z: pp.z }, 2.7, 30 * ch.pow, { x: 5, y: 6.5, z: 5 }, { max: 12, radial: true, heavy: true, tall: .5 }); addCombo(hits.length); G.rage = Math.min(100, G.rage + hits.length * 2); G.shake = .3; G.hitstop = 70; sfx('wood'); sfx('boom', .5); fx.cloud({ x: pp.x, y: .2, z: pp.z }, 6, '#b9b2a2', .9, .8); buzz(40); }
@@ -469,10 +482,12 @@ export function updatePlayer(dt) {
   }
   if (P.atk) { P.atk.t += dt / P.atk.dur; if (!P.atk.hit && P.atk.t >= .45) { P.atk.hit = true; doHit(P.atk); } if (P.atk.t >= 1) P.atk = null; }
   P.cdB--;
+  const spray = !!(P.wdef && P.wdef.spray);
+  if (spray && !P.carry) sprayTick(dt, locked); else P.spraying = false;
   if (!locked && !P.atk) {
     if (P.carry) { if ((I.a && !P.pa) || (I.b && !P.pb)) throwCarry(); }
     else if (I.b && !P.pb && P.cdB <= 0) { if (!onG && P.air > 4) { P.slam = true; v.y = -17; sfx('whoosh'); } else startAtk('b'); }
-    else if (I.a) startAtk('a');
+    else if (I.a && !spray) startAtk('a');
   }
   if (I.c && !P.pc && G.rage >= 100 && !locked) special();
   // E: 할 일 → 내려놓기 → 집기/장착/엎기
@@ -482,12 +497,16 @@ export function updatePlayer(dt) {
     if (G.interact && G.interact(ePress, I.e, dt)) { P.eHold = 0; }
     else if (ePress && P.carry) throwCarry(true);
     else if (P.cand && !P.cand.dead) {
-      const c = P.cand;
-      if (c.def.flip) { if (I.e) { P.eHold += dt; if (P.eHold >= .45) { P.eHold = 0; flipProp(c); P.cand = null; } } else P.eHold = 0; }
-      else if (ePress) { if (c.def.weapon) { equip(c.type); kill(c); } else carry(c); P.cand = null; }
+      const c = P.cand, d = c.def;
+      if (d.use) { if (ePress) { useProp(c); P.cand = null; } }
+      else if (d.ride && G.toys && d.grab === false) { if (ePress) { P.cand = null; mount(c); } }
+      // 바퀴의자: 짧게 = 집어 들기, 꾹 = 올라타기
+      else if (d.ride && G.toys) { if (I.e) { P.eHold += dt; if (P.eHold >= .35) { P.eHold = 0; P.cand = null; mount(c); } } else { if (P.pe && P.eHold > 0) { carry(c); P.cand = null; } P.eHold = 0; } }
+      else if (d.flip) { if (I.e) { P.eHold += dt; if (P.eHold >= .45) { P.eHold = 0; flipProp(c); P.cand = null; } } else P.eHold = 0; }
+      else if (ePress) { if (d.weapon) { equip(c.type, c); kill(c); } else carry(c); P.cand = null; }
     } else P.eHold = 0;
   }
-  if (P.carry && P.carry !== true) { const c = P.carry; if (c.dead) P.carry = null; else { const cb = c.body; cb.position.set(pp.x, pp.y + 1.95 + c.size[1] / 2, pp.z); cb.velocity.set(0, 0, 0); cb.angularVelocity.set(0, 0, 0); cb.quaternion.setFromEuler(0, P.yaw, 0); } }
+  holdCarry(pp);
   if (P.rush > 0) { P.rush--; if (G.tick % 3 === 0) fx.bitsAt({ x: pp.x, y: .1, z: pp.z }, 2, '#f2b705', 1, 1); }
   if (P.storm > 0) { P.storm--; if (P.storm % 8 === 0) { fx.sheet({ x: pp.x + rand(-2, 2), y: 1.2, z: pp.z + rand(-2, 2) }, 8, '#ffffff', 5); const h = attack({ x: pp.x, y: 1, z: pp.z }, 4.6, 10, { x: 3, y: 2.5, z: 3 }, { max: 14, radial: true, tall: 1 }); addCombo(Math.min(3, h.length)); sfx('paper', .4); } }
   const hs = Math.hypot(v.x, v.z); P.speed = lerp(P.speed, clamp(hs / 5.5, 0, 1.2), .25); if (onG && hs > .4) { P.walk += hs * dt * 2.6; if (Math.sin(P.walk) * Math.sin(P.walk - hs * dt * 2.6) < 0) sfx('step', .25); }
@@ -503,7 +522,7 @@ function followPose(pos, look) {
   look.set(pp.x + sx, pp.y + (P.seated ? 1.2 : 1.5), pp.z + sz);
   dirv.set(Math.sin(CAM.yaw) * cy, Math.sin(CAM.pitch), Math.cos(CAM.yaw) * cy);
   let dist = CAM.dist; ray.set(look, dirv); ray.far = dist + .3; const hit = ray.intersectObjects(G.camBlock, false)[0]; if (hit) dist = Math.max(.9, hit.distance - .3);
-  pos.copy(look).addScaledVector(dirv, dist); if (G.scene === 'office') pos.y = Math.min(pos.y, 2.86);
+  pos.copy(look).addScaledVector(dirv, dist); if (G.ceil) pos.y = Math.min(pos.y, G.ceil);
 }
 export function camTo(to, dur = .8) { CAM.from = { pos: X.camera.position.clone(), look: CAM.look.clone() }; CAM.to = to; CAM.ct = 0; CAM.dur = Math.max(.05, dur); CAM.mode = 'cut'; }
 export function camHold(pos, look) { CAM.mode = 'hold'; CAM.hp = new THREE.Vector3(...pos); CAM.hl = new THREE.Vector3(...look); X.camera.position.copy(CAM.hp); CAM.look.copy(CAM.hl); X.camera.lookAt(CAM.look); }
@@ -531,7 +550,8 @@ export function renderPlayer(dt = 1 / 60) {
     if (ex !== R.shown) { R.face.material.map = faceTex(R.L, ex); R.shown = ex; }
     if (P.tremble > 0) { P.tremble--; R.face.position.x = (Math.random() - .5) * .004; } else R.face.position.x = 0;
     R.vein.visible = P.expr === 'endure' || P.expr === 'rage'; if (R.vein.visible) { const k = .08 + Math.sin(performance.now() * .012) * .012; R.vein.scale.set(k, k, 1); }
-    poseRig(R, { walk: P.walk, speed: P.onG && !P.seated ? P.speed : 0, air: !P.onG && P.air > 5 && !P.seated, slam: P.slam, carry: !!P.carry && P.carry !== true, atk: P.atk, t: P.t, seated: !!P.seated, typing: !!P.seated && P.seated.tag === 'myChair' && P.expr === 'normal', clench: P.expr === 'endure', cheer: P.cheer, relief: P.expr === 'relief', look: P.look, armed: !!P.weapon });
+    const rk = P.ride && P.ride.kind, sitting = !!P.seated || rk === 'chair' || rk === 'fork';
+    poseRig(R, { walk: P.walk, speed: P.onG && !sitting ? P.speed : 0, air: !P.onG && P.air > 5 && !sitting, slam: P.slam, carry: !!P.carry && P.carry !== true, atk: P.atk, t: P.t, seated: sitting, typing: (!!P.seated && P.seated.tag === 'myChair' && P.expr === 'normal') || rk === 'fork', push: rk === 'cart', clench: P.expr === 'endure', cheer: P.cheer, relief: P.expr === 'relief', look: P.look, armed: !!P.weapon });
   }
   const cam = X.camera, m = CAM.mode;
   if (m === 'follow' && P.active) { followPose(des, tgt); cam.position.lerp(des, .5); CAM.look.copy(tgt); }

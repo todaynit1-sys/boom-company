@@ -4,13 +4,14 @@ import { SETS, WHOS, MOTTOS } from './data/lines.js';
 import { G, won } from './state.js';
 import { sfx } from './audio.js';
 import { refreshMusic } from './music.js';
+import { FLOORS, FLOOR_IDS } from './floors.js';
 
 export const act = {};
 const $ = id => document.getElementById(id);
 const show = (id, on) => $(id).classList.toggle('off', !on);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const STYLES = [{ v: 'glass', n: '유리 빌딩', rank: 0 }, { v: 'brick', n: '벽돌 상가', rank: 1 }, { v: 'gov', n: '관공서풍', rank: 3 }];
-const SCREENS = ['s-title', 's-pick', 's-build', 's-chars', 's-pause', 's-bill', 's-fake'];
+const SCREENS = ['s-title', 's-pick', 's-floors', 's-build', 's-chars', 's-pause', 's-bill', 's-fake'];
 export function only(id) { SCREENS.forEach(s => show(s, s === id)); }
 export function charName(id) { return S.charName[id] || CHARS[id].n; }
 // 저장이 브라우저에만 남는 게임이라 캐릭터·소품·건물은 처음부터 모두 연다(직급은 칭호로만 쓴다)
@@ -46,6 +47,51 @@ function showPick(missions, ids) {
   }
 }
 
+// ───── 자유 난동: 시작할 층 고르기(깬 도전과제 수는 이 기기에만 남는다)
+function showFloors() {
+  only('s-floors'); const box = $('fl-list'); box.textContent = '';
+  for (const id of FLOOR_IDS) {
+    const f = FLOORS[id], got = f.goals.filter(g => S.done && S.done[g.id]).length, b = el('button', 'fl fl-' + id);
+    b.type = 'button'; b.appendChild(el('b', 'lv', f.lv));
+    const t = el('div', 'tx'); t.appendChild(el('strong', '', f.n)); t.appendChild(el('span', '', f.sub)); t.appendChild(el('em', '', f.desc)); b.appendChild(t);
+    b.appendChild(el('small', 'gl', '도전과제 ' + got + '/' + f.goals.length));
+    b.onclick = () => { sfx('up'); act.free(id); }; box.appendChild(b);
+  }
+}
+// 엘리베이터 층 버튼: 안에 들어서면 뜬다. PC에서는 버튼을 누를 수 있게 마우스 고정을 푼다
+let elevOn = false;
+export const elevOpen = () => elevOn;
+export function elev(d) {
+  elevOn = !!d;
+  if (!d) { G.uiFree = false; return show('elev', false); }
+  const box = $('el-btns'); box.textContent = '';
+  d.floors.forEach((f, i) => {
+    const b = el('button', 'eb' + (f.id === d.cur ? ' on' : '')); b.type = 'button';
+    b.appendChild(el('b', '', f.lv)); b.appendChild(el('span', '', f.id === d.cur ? f.n + ' (여기)' : f.n)); if (!G.mobile) b.appendChild(el('kbd', '', String(i + 1)));
+    if (f.id !== d.cur) b.onclick = () => act.goFloor(f.id);
+    box.appendChild(b);
+  });
+  show('elev', true);
+  if (document.pointerLockElement) { G.uiFree = true; document.exitPointerLock(); }
+}
+// 층 도전과제 목록과 달성 알림
+export function goals(title, items, foot) {
+  const o = $('obj'); show('obj', true); o.textContent = ''; o.classList.add('goals');
+  const h = el('h3'); h.appendChild(el('span', '', title)); h.appendChild(el('span', '', items.filter(i => i.done).length + ' / ' + items.length)); o.appendChild(h);
+  let left = 0;
+  items.forEach(it => {
+    const d = el('div', it.done ? 'done' : left++ >= 2 ? 'later' : ''); d.appendChild(el('i', '', it.done ? '✓' : ''));
+    const s = el('span', '', it.t); if (!it.done && it.n > 1) s.appendChild(el('em', '', ` ${it.have}/${it.n}`)); d.appendChild(s); o.appendChild(d);
+  });
+  if (foot) o.appendChild(el('p', '', '→ ' + foot));
+}
+let goalT;
+export function goalToast(text, n) {
+  const g = $('goalt'); g.textContent = ''; g.appendChild(el('small', '', '도전과제 달성 · 오늘 ' + n + '개째')); g.appendChild(el('b', '', text)); g.appendChild(el('em', '', '보너스 +3,000,000원'));
+  g.classList.remove('off', 'pop'); void g.offsetWidth; g.classList.add('pop'); clearTimeout(goalT); goalT = setTimeout(() => g.classList.add('off'), 2800);
+}
+export function alarm(on) { $('alarmfx').classList.toggle('on', !!on); }
+
 // ───── 회사 설정
 function fillBuilder() {
   const B = S.company, ch = () => { save(); fillBuilder(); };
@@ -80,7 +126,7 @@ function fillChars() {
 export function showChars() { only('s-chars'); fillChars(); act.preview(true); }
 
 // ───── 게임 중 표시
-export function hudShow(on) { show('hud', on); show('status', on); show('pad', on && G.mobile); show('cross', on && !G.mobile); if (!on) { show('keys', false); show('obj', false); show('band', false); $('vig').style.opacity = 0; } }
+export function hudShow(on) { show('hud', on); show('status', on); show('pad', on && G.mobile); show('cross', on && !G.mobile); if (!on) { show('keys', false); show('obj', false); show('band', false); show('elev', false); elevOn = false; $('vig').style.opacity = 0; alarm(false); } }
 // 시계 넘김: 화면이 검게 됐다가 시각이 크게 뜬다
 export function fade(on, instant) {
   const f = $('fade');
@@ -96,7 +142,7 @@ export function tips(list) { tq.push(...list); if (!tBusy) nextTip(); }
 function nextTip() { const t = $('tip'); if (!tq.length) { tBusy = false; show('tip', false); return; } tBusy = true; t.innerHTML = tq.shift(); show('tip', true); t.style.animation = 'none'; void t.offsetWidth; t.style.animation = ''; setTimeout(nextTip, 3300); }
 export function clearTips() { tq.length = 0; }
 export function boil() { const b = $('h-stressbox'); b.classList.remove('boil'); void b.offsetWidth; b.classList.add('boil'); }
-export function keysHint(on) { if (G.mobile || !on) return show('keys', false); const k = $('keys'); k.innerHTML = '<b>WASD</b>이동<b>마우스</b>시점(화면을 클릭하면 고정)<b>스페이스</b>점프<br><b>좌클릭</b>때리기<b>우클릭</b>강타<b>E</b>집기·던지기·엎기<b>Q</b>필살기'; show('keys', on); }
+export function keysHint(on) { if (G.mobile || !on) return show('keys', false); const k = $('keys'); k.innerHTML = '<b>WASD</b>이동<b>마우스</b>시점(화면을 클릭하면 고정)<b>스페이스</b>점프<br><b>좌클릭</b>때리기<b>우클릭</b>강타<b>E</b>집기·던지기·엎기' + (G.toys ? '·타기' : '') + '<b>Q</b>필살기'; show('keys', on); }
 let last = {};
 export function hud(d) {
   const set = (id, k, v) => { if (last[k] !== v) { last[k] = v; $(id).textContent = v; } };
@@ -110,7 +156,7 @@ export function hud(d) {
   if (last.r !== ready) { last.r = ready; $('status').classList.toggle('ready', ready); $('p-sp').classList.toggle('ready', ready); $('h-ragel').textContent = ready ? (G.mobile ? '필살기!' : 'Q 필살기!') : '필살기'; }
 }
 export function objectives(list, idx, hint) {
-  const o = $('obj'); if (!list) return show('obj', false); show('obj', true); o.textContent = '';
+  const o = $('obj'); if (!list) return show('obj', false); show('obj', true); o.textContent = ''; o.classList.remove('goals');
   const h = el('h3'); h.appendChild(el('span', '', idx < 0 ? '자유 난동' : '할 일')); if (idx >= 0) h.appendChild(el('span', '', Math.min(idx, list.length) + ' / ' + list.length)); o.appendChild(h);
   list.forEach((t, i) => { const d = el('div', idx < 0 ? 'now' : i < idx ? 'done' : i === idx ? 'now' : ''); d.appendChild(el('i', '', i < idx && idx >= 0 ? '✓' : '')); d.appendChild(el('span', '', t)); if (idx < 0) d.style.background = 'none'; o.appendChild(d); });
   if (hint) o.appendChild(el('p', '', '→ ' + hint));
@@ -157,6 +203,7 @@ export function bill(d) {
   const sum = el('div', 'sum'); sum.appendChild(el('span', '', '합계')); sum.appendChild(el('b', '', won(d.total))); b.appendChild(sum);
   const ex = el('div', 'ex'); ex.appendChild(el('span', '', '최고 연타 ' + d.maxCombo)); ex.appendChild(el('span', '', '걸린 시간 ' + Math.floor(d.sec / 60) + '분 ' + (d.sec % 60) + '초')); b.appendChild(ex);
   if (d.stressMax != null) { const sx = el('div', 'ex'); sx.appendChild(el('span', '', '하루 스트레스 최고 ' + Math.round(d.stressMax) + '%')); sx.appendChild(el('span', '', '퇴근할 때 ' + Math.round(d.stressEnd) + '%')); b.appendChild(sx); }
+  if (d.goals) { const gx = el('div', 'ex'); gx.appendChild(el('span', '', '도전과제 ' + d.goals.got + ' / ' + d.goals.total)); gx.appendChild(el('span', '', '다녀간 층 ' + d.goals.floors + '곳')); b.appendChild(gx); }
   const seal = el('div', 'seal' + (rankOf(S.total) >= 7 ? ' gold' : ''), '전액'); seal.appendChild(document.createElement('br')); seal.appendChild(document.createTextNode('회사 부담')); b.appendChild(seal);
   setTimeout(() => sfx('stamp'), 1650);
   b.appendChild(el('div', 'title', '「' + TITLES.find(t => d.total < t[0])[1] + '」'));
@@ -183,7 +230,7 @@ export function fake(on) {
 }
 
 export function init(missions, ids) {
-  $('b-course').onclick = () => act.course(); $('b-pick').onclick = () => showPick(missions, ids); $('b-free').onclick = () => act.free();
+  $('b-course').onclick = () => act.course(); $('b-pick').onclick = () => showPick(missions, ids); $('b-free').onclick = showFloors; $('fl-back').onclick = () => only('s-title');
   $('b-build').onclick = showBuilder; $('b-chars').onclick = showChars; $('pk-back').onclick = () => only('s-title');
   $('o-snd').onchange = e => { S.mute = !e.target.checked; save(); refreshMusic(); }; $('o-bgm').onchange = e => { S.bgm = e.target.checked; save(); refreshMusic(); };
   $('o-hap').onchange = e => { S.haptic = e.target.checked; save(); }; $('o-calm').onchange = e => { S.calm = e.target.checked; G.calm = S.calm; save(); };

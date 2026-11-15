@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=22">
+<link rel="stylesheet" href="css/style.css?v=23">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
@@ -53,6 +53,8 @@
   <div id="tip" class="off"></div>
   <div id="over"></div>
   <div id="keys" class="off"></div>
+  <div id="alarmfx"></div>
+  <div id="elev" class="off"><div class="el-h">엘리베이터<small>어느 층으로 갈까?</small></div><div id="el-btns"></div></div>
   <div id="fade" class="off"><b id="fade-time"></b><span id="fade-title"></span></div>
 
   <div id="pad" class="off">
@@ -72,7 +74,7 @@
   <div class="logo"><h1><span>회</span><span>사</span> <span>뿌</span><span>시</span><span>기</span></h1><p>출근부터 퇴근까지, 참다가 터뜨린다</p></div>
   <div class="t-btns">
     <button class="btn main" id="b-course">출근하기 <small>출근 · 오전 · 점심 · 오후 · 야근 · 약 9분</small></button>
-    <div class="t-row"><button class="btn" id="b-pick">상황 골라 하기</button><button class="btn" id="b-free">자유 난동</button></div>
+    <div class="t-row"><button class="btn" id="b-pick">상황 골라 하기</button><button class="btn" id="b-free">자유 난동 · 층 고르기</button></div>
     <div class="t-row"><button class="btn" id="b-build">회사 설정</button><button class="btn" id="b-chars">캐릭터</button></div>
     <div class="rank"><b id="t-rank"></b><div class="bar"><div id="t-rankbar"></div></div><span id="t-total"></span></div>
     <div class="opts"><label><input type="checkbox" id="o-snd"> 효과음</label><label><input type="checkbox" id="o-bgm"> 배경음악</label><label><input type="checkbox" id="o-hap"> 진동</label><label><input type="checkbox" id="o-calm"> 흔들림 약하게</label><label id="o-skipw" class="off"><input type="checkbox" id="o-skip"> 출근 장면 건너뛰기</label></div>
@@ -83,6 +85,12 @@
   <h2>상황 골라 하기</h2><p class="hint">상황 하나에 2분쯤. 임무를 순서대로 하다 보면 터집니다.</p>
   <div id="pk-list"></div>
   <div class="p-btns"><button class="btn" id="pk-back">돌아가기</button></div>
+</div></section>
+
+<section id="s-floors" class="scr off"><div class="panel">
+  <h2>어디부터 부술까?</h2><p class="hint">시작할 층을 고르세요. 엘리베이터를 타면 언제든 다른 층으로 가고, 부순 건 층마다 그대로 남아요.</p>
+  <div id="fl-list"></div>
+  <div class="p-btns"><button class="btn" id="fl-back">돌아가기</button></div>
 </div></section>
 
 <section id="s-build" class="scr off"><div class="panel">
@@ -106,14 +114,15 @@
 
 <section id="s-pause" class="scr off"><div class="panel narrow">
   <h2>잠깐 멈춤</h2>
-  <ul class="help"><li><b>W A S D</b> 이동 · <b>마우스</b> 시점 · <b>스페이스</b> 점프</li><li><b>좌클릭 / J</b> 때리기 — 누르고 있으면 연타</li><li><b>우클릭 / K</b> 강타 — 공중에서는 내려찍기</li><li><b>E</b> 집기·던지기·무기 들기 — 꾹 누르면 책상 엎기</li><li><b>Q</b> 필살기 · <b>B</b> 위장 화면 (부장님 떴다!)</li></ul>
+  <ul class="help"><li><b>W A S D</b> 이동 · <b>마우스</b> 시점 · <b>스페이스</b> 점프</li><li><b>좌클릭 / J</b> 때리기 — 누르고 있으면 연타</li><li><b>우클릭 / K</b> 강타 — 공중에서는 내려찍기</li><li><b>E</b> 집기·던지기·무기 들기 — 꾹 누르면 책상 엎기</li><li>자유 난동: 의자 <b>E</b> 꾹 = 올라타기 · 카트·지게차 <b>E</b> = 타기 · 소화기 들고 <b>좌클릭</b> 꾹 = 뿜기</li><li><b>Q</b> 필살기 · <b>B</b> 위장 화면 (부장님 떴다!)</li></ul>
   <div class="p-btns col"><button class="btn main" id="p-resume">계속하기</button><button class="btn" id="p-quit">그만두고 청구서 받기</button><button class="btn" id="p-title">처음으로</button></div>
 </div></section>
 
 <section id="s-bill" class="scr off"><div class="receipt" id="bill"></div></section>
 <section id="s-fake" class="scr off"><div class="fake"><div class="fk-bar">4분기 실적 집계.xlsx — 표 계산</div><table id="fk-table"></table><p>아무 키나 누르면 돌아갑니다</p></div></section>
 <div id="toast" class="off"></div>
+<div id="goalt" class="off"></div>
 <div id="boot">불러오는 중…</div>
-<script type="module" src="js/main.js?v=22"></script>
+<script type="module" src="js/main.js?v=23"></script>
 </body>
 </html>

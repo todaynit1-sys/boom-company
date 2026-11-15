@@ -5,8 +5,10 @@ import { tick } from './engine.js';
 import * as fx from './fx.js';
 import { I, P, CAM, renderPlayer } from './player.js';
 import { MISSIONS, MISSION_IDS, MS } from './missions.js';
-import { R, title, preview, startCourse, startSingle, startFree, bill, again, fmtClock } from './run.js';
+import { R, title, preview, startCourse, startSingle, startFree, goFloor, bill, again, fmtClock } from './run.js';
 import { tickWorld } from './world.js';
+import { FLOOR_IDS } from './floors.js';
+import { TOY } from './toys.js';
 import * as ui from './ui.js';
 import { unlock } from './audio.js';
 import { duckMusic, musicState } from './music.js';
@@ -30,6 +32,8 @@ addEventListener('keydown', e => {
   if (faked) { setFake(false); e.preventDefault(); return; }
   if (e.code === 'Escape' || e.code === 'KeyP') return setPause(!paused);
   if (e.code === 'KeyB') return setFake(true);
+  // 엘리베이터 층 버튼: 숫자 키 1~4
+  if (ui.elevOpen() && /^Digit[1-9]$/.test(e.code)) { const id = FLOOR_IDS[+e.code.slice(5) - 1]; if (id) goFloor(id); e.preventDefault(); return; }
   keys.add(e.code); const k = BTN[e.code]; if (k) I[k] = true;
   if (k || e.code.startsWith('Arrow') || e.code === 'KeyW' || e.code === 'KeyS') e.preventDefault();
 });
@@ -49,7 +53,7 @@ cv.addEventListener('mousedown', e => {
 addEventListener('mouseup', e => { dragging = false; if (e.button === 0) I.a = false; if (e.button === 2) I.b = false; });
 addEventListener('mousemove', e => { if (document.pointerLockElement === cv || (dragging && !G.mobile)) { I.lookX += e.movementX * .0026; I.lookY += e.movementY * .002; } });
 cv.addEventListener('contextmenu', e => e.preventDefault());
-document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && playing() && !paused && !faked && G.locked) setPause(true); G.locked = !!document.pointerLockElement; });
+document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && playing() && !paused && !faked && G.locked && !G.uiFree) setPause(true); G.locked = !!document.pointerLockElement; });
 // 터치: 왼쪽 조이스틱, 오른쪽 끌어서 시점, 버튼
 const joyEl = document.getElementById('joy'), knob = joyEl.firstElementChild, lookEl = document.getElementById('look');
 function joyMove(e) { const r = joyEl.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2), l = Math.hypot(dx, dy) || 1, m = Math.min(l, 50); I.mx = dx / l * m / 50; I.mz = -dy / l * m / 50; knob.style.transform = `translate(${dx / l * m}px,${dy / l * m}px)`; }
@@ -104,7 +108,7 @@ function frame(t) {
 }
 
 Object.assign(ui.act, {
-  course: startCourse, single: startSingle, free: startFree, preview, title, again, clock: fmtClock,
+  course: startCourse, single: startSingle, free: startFree, goFloor, preview, title, again, clock: fmtClock,
   pause: () => setPause(!paused),
   quit: () => { paused = false; G.userPause = false; ui.pause(false); duckMusic(1); bill(); },
   home: () => { paused = false; G.userPause = false; ui.pause(false); duckMusic(1); title(); },
@@ -121,9 +125,9 @@ async function boot() {
   if (location.hash.includes('debug')) {
     window.__boom = {
       G, R, I, P, S, MS, CAM, X, music: musicState,
-      peek: () => ({ mode: R.mode, day: R.i, tick: G.tick, paused: G.paused, mission: MS.m && MS.m.n, step: MS.step ? MS.i + ':' + MS.step.t : MS.phase, clock: fmtClock(G.clock || 0), money: Math.round(G.money), stress: Math.round(G.stress || 0), props: G.props.length, debris: fx.debrisCount(), restocked: Object.values(G.restocked || {}).reduce((a, b) => a + b, 0), seated: !!P.seated, expr: P.expr, cam: CAM.mode, x: P.active ? +P.body.position.x.toFixed(1) : null, z: P.active ? +P.body.position.z.toFixed(1) : null, weapon: P.weapon, calls: X.renderer.info.render.calls }),
+      peek: () => ({ mode: R.mode, day: R.i, tick: G.tick, paused: G.paused, mission: MS.m && MS.m.n, step: MS.step ? MS.i + ':' + MS.step.t : MS.phase, clock: fmtClock(G.clock || 0), money: Math.round(G.money), stress: Math.round(G.stress || 0), props: G.props.length, debris: fx.debrisCount(), restocked: Object.values(G.restocked || {}).reduce((a, b) => a + b, 0), seated: !!P.seated, expr: P.expr, cam: CAM.mode, x: P.active ? +P.body.position.x.toFixed(1) : null, z: P.active ? +P.body.position.z.toFixed(1) : null, weapon: P.weapon, calls: X.renderer.info.render.calls, floor: R.mode === 'free' ? R.floor : null, ride: P.ride ? P.ride.kind : null, fuel: P.fuel ? Math.round(P.fuel) : 0, alarm: TOY.alarm, wet: TOY.wet, goals: R.got ? [...R.got] : null }),
       step: n => { for (let i = 0; i < n; i++) step(); draw(n / 60); return window.__boom.peek(); },
-      single: startSingle, course: startCourse, free: startFree, bill, title,
+      single: startSingle, course: startCourse, free: startFree, go: goFloor, toy: TOY, bill, title,
       set auto(v) { G.auto = v; if (!v) { I.mx = I.mz = 0; I.a = I.b = I.e = I.jump = I.c = false; } }, get auto() { return G.auto; },
     };
   }

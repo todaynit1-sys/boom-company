@@ -1,4 +1,4 @@
-import { resetWorld, solid, spawn, kill, GR, PH, CANNON } from './engine.js';
+import { resetWorld, solid, spawn, kill, release, setScreen, settleFrags, GR, PH, CANNON } from './engine.js';
 import { THREE, X, M, bx, pl, textMat, setTime } from './gfx.js';
 import { DEFS } from './data/props.js';
 import { G, rand, pick, clamp } from './state.js';
@@ -10,11 +10,15 @@ export const RECIPE = {};
 export const find = t => (TAG[t] && !TAG[t].dead ? TAG[t] : null);
 export function tagged(prefix) { return Object.keys(TAG).filter(k => k.startsWith(prefix)).map(k => TAG[k]).filter(p => p && !p.dead); }
 const PI = Math.PI;
+// 층을 지을 때 놓은 순서. 층을 떠났다 돌아오면 이 번호로 부서진 것·옮긴 것을 되살린다
+const SEQ = { n: 0 };
+export function beginFloor() { SEQ.n = 0; for (const k in TAG) delete TAG[k]; for (const k in RECIPE) delete RECIPE[k]; }
 
 // 바닥(또는 base 높이)에 세워 놓기
 export function put(type, x, z, o = {}) {
   const size = o.size || DEFS[type].size, y = (o.base || 0) + size[1] / 2 + .004, p = spawn(type, x, y, z, o);
   if (o.tag) { TAG[o.tag] = p; RECIPE[o.tag] = { type, x, y, z, o: Object.assign({}, o) }; }
+  p.seq = SEQ.n++;
   return p;
 }
 // 다른 물건 위에 올려놓기 (dx,dz는 그 물건 기준)
@@ -25,7 +29,73 @@ export function on(par, type, dx = 0, dz = 0, o = {}) {
 export function hang(type, x, y, z, ry = 0, o = {}) {
   const oo = Object.assign({ fixed: true, ry }, o), p = spawn(type, x, y, z, oo);
   if (o.tag) { TAG[o.tag] = p; RECIPE[o.tag] = { type, x, y, z, o: oo }; }
+  p.seq = SEQ.n++;
   return p;
+}
+
+// ───── 층 기억: 떠날 때 적고, 돌아와 다시 지은 뒤 그대로 맞춘다
+export function snapshotFloor(carried) {
+  settleFrags();
+  const gone = [], live = [], extra = [], bySeq = new Map();
+  for (const p of G.props) if (p.seq != null && !p.dead) bySeq.set(p.seq, p);
+  for (let s = 0; s < SEQ.n; s++) {
+    const p = bySeq.get(s);
+    if (!p || p.out || p === carried) { gone.push(s); continue; }
+    const b = p.body, q = b.quaternion;
+    live.push([s, b.position.x, b.position.y, b.position.z, q.x, q.y, q.z, q.w, p.hp, p.fixed, p.screen || null, p.lift || 0]);
+  }
+  for (const p of G.props) {
+    if (p.seq != null || p.kind !== 'obj' || p.dead || p.out || p.held || p === carried) continue;
+    const b = p.body, q = b.quaternion, { v, av, life, ...opt } = p.opt || {};
+    extra.push([p.type, opt, b.position.x, b.position.y, b.position.z, q.x, q.y, q.z, q.w, p.hp]);
+  }
+  return { gone, live, extra, fx: fx.snapshot() };
+}
+export function applyFloor(s) {
+  if (!s) return;
+  const gone = new Set(s.gone), rec = new Map(s.live.map(r => [r[0], r]));
+  for (const p of G.props.slice()) {
+    if (p.seq == null) continue;
+    if (gone.has(p.seq)) { kill(p); continue; }
+    const r = rec.get(p.seq); if (!r) continue;
+    if (p.fixed && !r[9]) release(p);
+    const b = p.body; b.position.set(r[1], r[2], r[3]); b.quaternion.set(r[4], r[5], r[6], r[7]); b.velocity.set(0, 0, 0); b.angularVelocity.set(0, 0, 0);
+    if (r[8] != null) p.hp = r[8]; if (r[10] && r[10] !== p.screen) setScreen(p, r[10]); if (r[11]) p.lift = r[11];
+    p.g.position.copy(b.position); p.g.quaternion.copy(b.quaternion); if (b.mass > 0) b.sleep();
+    p.def.onRestore && p.def.onRestore(p);
+  }
+  for (const [type, opt, x, y, z, qx, qy, qz, qw, hp] of s.extra) {
+    const p = spawn(type, x, y, z, opt); p.body.quaternion.set(qx, qy, qz, qw); if (hp != null) p.hp = hp; p.g.position.copy(p.body.position); p.g.quaternion.copy(p.body.quaternion); p.body.sleep();
+  }
+  fx.restore(s.fx);
+  G.settle = G.tick + 90;
+}
+
+// ───── 모든 층에 같은 자리(남쪽 벽 x=-3.5)에 있는 엘리베이터
+export const EX = -3.5;
+export function elevatorBay(L, o = {}) {
+  const ex = EX, gw = 1.2, gh = 2.3, H = o.H || 3, wm = o.wall || 'wall';
+  solid((-14.2 + ex - gw / 2) / 2, H / 2, 9.1, ex - gw / 2 + 14.2, H, .2, wm);
+  solid((ex + gw / 2 + 14.2) / 2, H / 2, 9.1, 14.2 - (ex + gw / 2), H, .2, wm);
+  solid(ex, (gh + H) / 2, 9.1, gw, H - gh, .2, wm);
+  solid(ex, -.25, 9.95, 1.8, .5, 1.7);
+  bx(L, 1.5, .02, 1.5, 'metal', ex, .01, 9.95).castShadow = false;
+  solid(ex - .82, 1.2, 9.95, .1, 2.4, 1.7, 'metalDark'); solid(ex + .82, 1.2, 9.95, .1, 2.4, 1.7, 'metalDark'); solid(ex, 1.2, 10.82, 1.74, 2.4, .1, 'metalDark'); solid(ex, 2.45, 9.95, 1.74, .1, 1.74, 'metal');
+  bx(L, .9, .02, .5, 'lightPanelOn', ex, 2.39, 9.95).castShadow = false; bx(L, 1.4, .05, .03, 'chrome', ex, .95, 10.75);
+  bx(L, .08, gh + .08, .04, 'metalDark', ex - gw / 2 - .02, gh / 2, 8.98); bx(L, .08, gh + .08, .04, 'metalDark', ex + gw / 2 + .02, gh / 2, 8.98); bx(L, gw + .12, .08, .04, 'metalDark', ex, gh + .02, 8.98);
+  const dL = bx(L, .6, gh - .02, .04, 'chrome', ex - .3, gh / 2, 9.1), dR = bx(L, .6, gh - .02, .04, 'chrome', ex + .3, gh / 2, 9.1);
+  const db = new CANNON.Body({ mass: 0, collisionFilterGroup: GR.STATIC, collisionFilterMask: GR.PROP | GR.FRAG | GR.PLAYER }); db.addShape(new CANNON.Box(new CANNON.Vec3(gw / 2, gh / 2, .05))); db.position.set(ex, gh / 2, 9.1); PH.world.addBody(db);
+  G.elevDoors = { L: dL, R: dR, t: 0, target: 0, body: db };
+  pl(L, .7, .22, textMat(o.label || '퇴근 ▼', { w: 256, h: 80, size: 46, bg: '#10151c', fg: '#6fe08a', lit: false }), ex, 2.55, 8.95, PI);
+  bx(L, .1, .18, .03, 'metal', ex + .85, 1.2, 8.97);
+  G.elev = { x: ex, z: 8.2 };
+}
+// 천장 스프링클러 머리(한 번에 그리는 작은 원반들). 물은 여기서 떨어진다
+export function sprinklers(L, y) {
+  const pts = []; for (let x = -12; x <= 12; x += 4) for (let z = -7; z <= 7; z += 3.5) pts.push({ x, z });
+  const m = new THREE.InstancedMesh(new THREE.CylinderGeometry(.045, .03, .04, 10), M('chrome'), pts.length), d = new THREE.Object3D();
+  pts.forEach((p, i) => { d.position.set(p.x, y - .02, p.z); d.updateMatrix(); m.setMatrixAt(i, d.matrix); }); L.add(m);
+  G.heads = pts; G.ceilH = y;
 }
 
 // ───── 총무팀: 이번 상황에 꼭 필요한 물건만 다시 들여놓는다
@@ -95,7 +165,8 @@ function deskSet(x, z, i, mine) {
 }
 
 export function buildOffice(co, time = 'day') {
-  const L = resetWorld(); G.scene = 'office'; for (const k in TAG) delete TAG[k]; for (const k in RECIPE) delete RECIPE[k];
+  const L = resetWorld(); G.scene = 'office'; beginFloor();
+  G.outZone = { x: 14.4, z0: -9.5, z1: 9.4, label: '창밖으로!', k: 2 }; G.ceil = 2.86;
   setTime(time);
   // 바닥·천장·바깥벽
   solid(0, -.5, 0, 28.4, 1, 18.4);
@@ -105,27 +176,13 @@ export function buildOffice(co, time = 'day') {
   const ce = new THREE.Mesh(new THREE.PlaneGeometry(28, 18), M('ceiling')); ce.rotation.x = PI / 2; ce.position.y = 3; L.add(ce);
   for (let x = -12; x <= 12; x += 4) for (let z = -6.5; z <= 6.5; z += 4.3) { const m = bx(L, 1.3, .03, .6, x === 0 && Math.abs(z + 2.2) < .1 ? 'lightPanelOn' : 'lightPanel', x, 2.985, z); m.castShadow = false; }
   // 남쪽 벽은 엘리베이터 자리를 비워 둔다
-  const ex = -3.5, gw = 1.2, gh = 2.3;
-  solid((-14.2 + ex - gw / 2) / 2, 1.5, 9.1, ex - gw / 2 + 14.2, 3, .2, 'wall');
-  solid((ex + gw / 2 + 14.2) / 2, 1.5, 9.1, 14.2 - (ex + gw / 2), 3, .2, 'wall');
-  solid(ex, (gh + 3) / 2, 9.1, gw, 3 - gh, .2, 'wall');
+  const ex = EX;
+  elevatorBay(L, { H: 3, label: '퇴근 ▼' });
   solid(-14.1, 1.5, 0, .2, 3, 18.4, 'wall'); solid(14.1, 1.5, 0, .2, 3, 18.4, 'wall');
   solid(0, .45, -9.1, 28.4, .9, .2, 'wall'); solid(0, 2.75, -9.1, 28.4, .5, .2, 'wall');
   for (let i = 0; i < 8; i++) solid(-14 + i * 4, 1.7, -9.1, .3, 1.6, .22, 'wall');
   for (let i = 0; i < 7; i++) hang('window', -12 + i * 4, 1.7, -9.1, 0, { tag: 'win' + i });
   solid(0, 1.5, -9.02, 28, 3, .06, null, { group: GR.PWALL, mask: GR.PLAYER });
-  // 엘리베이터 칸과 문
-  solid(ex, -.25, 9.95, 1.8, .5, 1.7);
-  bx(L, 1.5, .02, 1.5, 'metal', ex, .01, 9.95).castShadow = false;
-  solid(ex - .82, 1.2, 9.95, .1, 2.4, 1.7, 'metalDark'); solid(ex + .82, 1.2, 9.95, .1, 2.4, 1.7, 'metalDark'); solid(ex, 1.2, 10.82, 1.74, 2.4, .1, 'metalDark'); solid(ex, 2.45, 9.95, 1.74, .1, 1.74, 'metal');
-  bx(L, .9, .02, .5, 'lightPanelOn', ex, 2.39, 9.95).castShadow = false; bx(L, 1.4, .05, .03, 'chrome', ex, .95, 10.75);
-  bx(L, .08, gh + .08, .04, 'metalDark', ex - gw / 2 - .02, gh / 2, 8.98); bx(L, .08, gh + .08, .04, 'metalDark', ex + gw / 2 + .02, gh / 2, 8.98); bx(L, gw + .12, .08, .04, 'metalDark', ex, gh + .02, 8.98);
-  const dL = bx(L, .6, gh - .02, .04, 'chrome', ex - .3, gh / 2, 9.1), dR = bx(L, .6, gh - .02, .04, 'chrome', ex + .3, gh / 2, 9.1);
-  const db = new CANNON.Body({ mass: 0, collisionFilterGroup: GR.STATIC, collisionFilterMask: GR.PROP | GR.FRAG | GR.PLAYER }); db.addShape(new CANNON.Box(new CANNON.Vec3(gw / 2, gh / 2, .05))); db.position.set(ex, gh / 2, 9.1); PH.world.addBody(db);
-  G.elevDoors = { L: dL, R: dR, t: 0, target: 0, body: db };
-  pl(L, .7, .22, textMat('퇴근 ▼', { w: 256, h: 80, size: 46, bg: '#10151c', fg: '#6fe08a', lit: false }), ex, 2.55, 8.95, PI);
-  bx(L, .1, .18, .03, 'metal', ex + .85, 1.2, 8.97);
-  G.elev = { x: ex, z: 8.2 };
   hang('timeclock', ex + 1.45, 1.35, 8.96, PI, { tag: 'timeclock' });
   // 기둥
   solid(-2, 1.5, -3.6, .5, 3, .5, 'wallDark'); solid(2, 1.5, -3.6, .5, 3, .5, 'wallDark');
@@ -169,6 +226,12 @@ export function buildOffice(co, time = 'day') {
   put('reception', 3.5, 6.7, { ry: PI, text: co.name, tag: 'reception' }); hang('logo', 3.5, 2.15, 8.96, PI, { text: co.name, tag: 'logo' });
   hang('banner', -9, 2.35, 8.98, PI, { text: '월요일도 파이팅^^', tag: 'banner' }); hang('frame', 9.5, 1.9, 8.97, PI, { text: '주인의식', tag: 'frame_lobby' });
   put('sofa', 9.5, 8.3, { ry: PI }); put('plant', 13.3, 8.3); put('plant', -13.3, 8.3); put('plant', 6.9, 8.4); put('extinguisher', -6.2, 8.75); put('hammer', -13.2, 6.6, { tag: 'hammer' }); put('box', -13.3, 5.8);
+  // 자유 난동에서만: 비상벨·택배 카트·스프링클러
+  if (G.toys) {
+    hang('alarm', ex - 1.7, 1.4, 8.97, PI, { tag: 'alarm' }); hang('alarm', -2, 1.3, -3.32, 0);
+    const ct = put('cart', 10.6, .9, { ry: PI / 2, tag: 'cart' }); on(ct, 'box', 0, .25); on(ct, 'box', 0, -.25, { ry: .2 });
+    sprinklers(L, 3);
+  }
   // 밤에 켜는 등: 내 자리 위, 부장실
   if (X.lamps[0]) { X.lamps[0].position.set(0, 2.55, -1.9); X.lamps[1].position.set(-11.2, 2.4, -6.3); }
   return L;
@@ -176,7 +239,7 @@ export function buildOffice(co, time = 'day') {
 
 const STY = { glass: ['bglass', 'winLit'], brick: ['brick', 'winLit'], gov: ['concrete', 'glassDark'] };
 export function buildExterior(co, time = 'day') {
-  const L = resetWorld(); G.scene = 'ext'; G.elevDoors = null; G.elev = null; for (const k in TAG) delete TAG[k]; for (const k in RECIPE) delete RECIPE[k];
+  const L = resetWorld(); G.scene = 'ext'; G.elevDoors = null; G.elev = null; G.outZone = null; G.ceil = null; G.heads = null; beginFloor();
   setTime(time);
   solid(0, -.5, 0, 120, 1, 120);
   const gr = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), M('asphalt')); gr.rotation.x = -PI / 2; gr.receiveShadow = true; L.add(gr);

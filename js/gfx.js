@@ -22,6 +22,14 @@ const TEX = {
   fabric: () => canvasTex(128, 128, (c, w, h) => { c.fillStyle = '#fff'; c.fillRect(0, 0, w, h); speckle(c, w, h, 2500, .2); }, [3, 3]),
   cardboard: () => canvasTex(128, 128, (c, w, h) => { c.fillStyle = '#c39a62'; c.fillRect(0, 0, w, h); speckle(c, w, h, 1500, .12); c.fillStyle = 'rgba(120,85,40,.45)'; c.fillRect(w * .44, 0, w * .12, h); }),
   soft: () => canvasTex(64, 64, (c) => { const g = c.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.fillRect(0, 0, 64, 64); }),
+  // 임원층 카펫: 짙은 자주색
+  carpetExec: () => canvasTex(256, 256, (c, w, h) => { c.fillStyle = '#5b2532'; c.fillRect(0, 0, w, h); speckle(c, w, h, 5000, .22); speckle(c, w, h, 2000, .05, false); }, [28, 18]),
+  // 로비 대리석 타일: 한 장(1.2m)에 결 한두 줄
+  marble: () => canvasTex(256, 256, (c, w, h) => { c.fillStyle = '#ebe7df'; c.fillRect(0, 0, w, h); speckle(c, w, h, 900, .05); for (let i = 0; i < 3; i++) { c.strokeStyle = `rgba(120,115,105,${.12 + Math.random() * .12})`; c.lineWidth = 1 + Math.random() * 2; c.beginPath(); let x = Math.random() * w, y = 0; c.moveTo(x, y); while (y < h) { y += 12; x += Math.random() * 18 - 9; c.lineTo(x, y); } c.stroke(); } c.strokeStyle = 'rgba(0,0,0,.16)'; c.lineWidth = 2; c.strokeRect(0, 0, w, h); }, [24, 15]),
+  concrete: () => canvasTex(256, 256, (c, w, h) => { c.fillStyle = '#8e908c'; c.fillRect(0, 0, w, h); speckle(c, w, h, 6000, .16); speckle(c, w, h, 2500, .06, false); for (let i = 0; i < 6; i++) { const g = c.createRadialGradient(0, 0, 0, 0, 0, 40); g.addColorStop(0, 'rgba(40,38,34,.18)'); g.addColorStop(1, 'rgba(40,38,34,0)'); c.save(); c.translate(Math.random() * w, Math.random() * h); c.fillStyle = g; c.fillRect(-40, -40, 80, 80); c.restore(); } }, [7, 5]),
+  hazard: () => canvasTex(128, 32, (c, w, h) => { c.fillStyle = '#f2c21a'; c.fillRect(0, 0, w, h); c.fillStyle = '#1b1b1b'; for (let x = -h; x < w + h; x += 32) { c.beginPath(); c.moveTo(x, h); c.lineTo(x + 16, h); c.lineTo(x + 16 + h, 0); c.lineTo(x + h, 0); c.fill(); } }),
+  globe: () => canvasTex(256, 128, (c, w, h) => { c.fillStyle = '#2f6fb3'; c.fillRect(0, 0, w, h); c.fillStyle = '#6fae55'; [[40, 40, 30, 22], [70, 85, 18, 26], [140, 45, 40, 20], [150, 80, 14, 18], [205, 90, 20, 12], [190, 40, 28, 16]].forEach(([x, y, a, b]) => { c.beginPath(); c.ellipse(x, y, a, b, .3, 0, 7); c.fill(); }); }),
+  slats: () => canvasTex(256, 128, (c, w, h) => { c.fillStyle = '#b07d4f'; c.fillRect(0, 0, w, h); for (let x = 0; x < w; x += 16) { c.fillStyle = `rgba(60,30,10,${.15 + Math.random() * .15})`; c.fillRect(x, 0, 3, h); } speckle(c, w, h, 800, .08); }),
 };
 export function tex(k) { return texs[k] || (texs[k] = TEX[k]()); }
 
@@ -39,7 +47,15 @@ const MATDEF = {
   lightPanel: { color: '#ffffff', emissive: '#fff6e0', emissiveIntensity: 1.6 }, lightPanelOn: { color: '#ffffff', emissive: '#fff6e0', emissiveIntensity: 1.6 },
   skin: { color: '#e8b895', roughness: .7 }, shirt: { color: '#f3f1ec', roughness: .8 }, pants: { color: '#2b2f3a', roughness: .85 }, shoe: { color: '#1b1b1d', roughness: .4 }, hair: { color: '#1d1a18', roughness: .7 },
   concrete: { color: '#a9a7a0', roughness: .95 }, brick: { color: '#a8523c', roughness: .95 }, bglass: { color: '#7fb4d6', roughness: .1, metalness: .5 }, winLit: { color: '#fff3c4', emissive: '#ffe9a0', emissiveIntensity: .8 }, asphalt: { color: '#5f6360', roughness: 1 },
+  // 새 층: 임원층·로비·주차장
+  carpetExec: { map: 'carpetExec', roughness: 1 }, marble: { map: 'marble', roughness: .18, metalness: .05 }, marbleDark: { color: '#33373d', roughness: .22, metalness: .1 }, wallWood: { color: '#6e4a30', roughness: .6 }, wallWarm: { color: '#e6dccb', roughness: .9 },
+  concreteTex: { map: 'concrete', roughness: .95 }, concreteWall: { color: '#9b9d99', roughness: .95 }, hazard: { map: 'hazard', roughness: .6 }, yellowPaint: { color: '#f2c21a', roughness: .45 }, orange: { color: '#ff6a1a', roughness: .5 },
+  carGlass: { color: '#16202a', roughness: .05, metalness: .5, transparent: true, opacity: .82 }, carInside: { color: '#0b0c0e', roughness: .9 }, headlight: { color: '#fffaf0', emissive: '#fff4d6', emissiveIntensity: 1.2 }, taillight: { color: '#c21d12', emissive: '#ff2a1a', emissiveIntensity: .9 },
+  celadon: { color: '#9cc6b2', roughness: .12 }, globe: { map: 'globe', roughness: .4 }, cream: { color: '#fff3df', roughness: .7 }, slats: { map: 'slats', roughness: .6 }, plaza: { color: '#b9b4aa', roughness: .95 },
+  alarmLamp: { color: '#ff3a2a', emissive: '#ff2a1a', emissiveIntensity: .6 }, beacon: { color: '#ff9a1a', emissive: '#ff8a00', emissiveIntensity: 1 },
 };
+// 자동차 도장: 반짝이는 색 (색마다 하나)
+export function paintMat(hex) { const k = 'paint' + hex; return mats[k] || (mats[k] = new THREE.MeshStandardMaterial({ color: hex, roughness: .22, metalness: .55 })); }
 export function M(k) {
   if (mats[k]) return mats[k];
   const d = Object.assign({}, MATDEF[k] || { color: k });
@@ -115,6 +131,11 @@ const SCREENS = {
   clockok: (c, w, h) => { c.fillStyle = '#1f7a46'; c.fillRect(0, 0, w, h); c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = '700 96px ' + FONT; c.fillText('정상 출근', w / 2, h * .55); c.font = '700 40px ' + FONT; c.fillText('08:59', w / 2, h * .85); },
   clocklate: (c, w, h) => { c.fillStyle = '#b3261e'; c.fillRect(0, 0, w, h); c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = '700 120px ' + FONT; c.fillText('지각', w / 2, h * .55); c.font = '700 40px ' + FONT; c.fillText('09:01', w / 2, h * .85); },
   off: (c, w, h) => { c.fillStyle = '#07080a'; c.fillRect(0, 0, w, h); },
+  // 로비 대형 전광판: 회사 자랑
+  led: (c, w, h, s = '회사') => { const g = c.createLinearGradient(0, 0, w, h); g.addColorStop(0, '#0b2a6b'); g.addColorStop(1, '#1d63c9'); c.fillStyle = g; c.fillRect(0, 0, w, h); c.fillStyle = '#ffd84d'; c.textAlign = 'center'; c.font = '700 26px ' + FONT; c.fillText('★ 고객 만족 1위 ★', w / 2, 60); c.fillStyle = '#fff'; c.font = '700 54px ' + TITLE; c.fillText(s + ' 창립 30주년', w / 2, 150); c.font = '700 24px ' + FONT; c.fillText('가족 같은 회사 · 일하기 좋은 기업', w / 2, 210); c.fillStyle = 'rgba(255,255,255,.18)'; for (let x = 0; x < w; x += 6) c.fillRect(x, 0, 1, h); },
+  gate: (c, w, h) => { c.fillStyle = '#10151c'; c.fillRect(0, 0, w, h); c.fillStyle = '#6fe08a'; c.textAlign = 'center'; c.font = '700 120px ' + FONT; c.fillText('↑', w / 2, h * .62); c.font = '700 36px ' + FONT; c.fillText('사원증을 대 주세요', w / 2, h * .9); },
+  kiosk: (c, w, h) => { c.fillStyle = '#f4f6f9'; c.fillRect(0, 0, w, h); c.fillStyle = '#1b3a6b'; c.fillRect(0, 0, w, 56); c.fillStyle = '#fff'; c.font = '700 28px ' + FONT; c.textAlign = 'left'; c.fillText('층별 안내', 20, 38); c.fillStyle = '#222'; c.font = '700 26px ' + FONT;[['12F', '임원실 · 대회의실'], ['7F', '영업팀 · 부장실'], ['1F', '로비 · 카페'], ['B2', '주차장']].forEach(([a, b], i) => { c.fillStyle = '#2f6bff'; c.fillText(a, 24, 104 + i * 54); c.fillStyle = '#222'; c.fillText(b, 100, 104 + i * 54); }); },
+  pos: (c, w, h) => { c.fillStyle = '#10151c'; c.fillRect(0, 0, w, h); c.fillStyle = '#ffd84d'; c.textAlign = 'center'; c.font = '700 40px ' + FONT; c.fillText('아메리카노', w / 2, h * .4); c.fillStyle = '#fff'; c.font = '700 64px ' + FONT; c.fillText('1,500원', w / 2, h * .78); },
 };
 export function screenMat(kind, arg) { const fn = SCREENS[kind] || SCREENS.off; return labelMat('S' + kind + (arg || ''), 512, 320, (c, w, h) => fn(c, w, h, arg)); }
 
@@ -157,6 +178,8 @@ const TIMES = {
   afternoon: { sun: 2.45, sunCol: '#ffe8c0', hemi: .76, exp: .93, bg: '#d4e2ec', env: .5, panel: 1.6, lamp: 0 },
   evening: { sun: 2.0, sunCol: '#ffc48a', hemi: .62, exp: .92, bg: '#f3b98a', env: .42, panel: 1.6, lamp: .25 },
   night: { sun: .5, sunCol: '#9db0ff', hemi: .34, exp: .98, bg: '#141a33', env: .16, panel: .05, lamp: 1 },
+  // 지하주차장: 햇빛 없이 형광등
+  garage: { sun: .28, sunCol: '#e4ecff', hemi: .62, exp: 1.02, bg: '#101316', env: .34, panel: 1.5, lamp: .85 },
 };
 export function setTime(t) {
   const T = TIMES[t] || TIMES.day; X.time = t;

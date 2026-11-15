@@ -1,8 +1,10 @@
 import { G, rand, pick } from './state.js';
 import { S, save, copy, rankOf, RANKS } from './save.js';
-import { buildOffice, buildExterior, find, restock, setWallClock, elev } from './world.js';
-import { later, slow, explode, shove, breakProp, settleFrags, setScreen } from './engine.js';
-import { P, I, CAM, spawnPlayer, updatePlayer, sit, standUp, setFace, camHold, camGlide, placeAt, throwCarry } from './player.js';
+import { buildOffice, buildExterior, find, restock, setWallClock, elev, snapshotFloor, applyFloor, EX } from './world.js';
+import { later, slow, explode, shove, breakProp, settleFrags, setScreen, spawn } from './engine.js';
+import { P, I, CAM, spawnPlayer, updatePlayer, sit, standUp, setFace, camHold, camGlide, camTo, placeAt, throwCarry, equip, carry } from './player.js';
+import { FLOORS, FLOOR_IDS, buildFloor, floorName, floorLv } from './floors.js';
+import { tickToys, resetToys, TOY } from './toys.js';
 import { MISSIONS, MS, startMission, stopMission, tickMission, missionHud } from './missions.js';
 import { SETS, COMMON } from './data/lines.js';
 import { setTime } from './gfx.js';
@@ -24,6 +26,7 @@ const baseMusic = sky => sky === 'night' ? 'night' : 'office';
 
 export function title() {
   clearTimers(); hush(); stopMission(); R.mode = 'title'; ui.fade(false, true); ui.band(null); ui.keysHint(false);
+  G.toys = false; G.emit = null; resetToys(); ui.elev(null); ui.alarm(false); R.panel = false;
   buildOffice(S.company, 'day'); spawnPlayer(S.char, 3.0, 4.5, Math.PI);
   Object.assign(CAM, { mode: 'orbit', center: { x: 3.0, y: 1.3, z: 4.9 }, r: 4.4, h: 1.75, base: Math.PI, sway: .45, t: 0 });
   G.onTick = () => { P.t++; }; G.paused = false; G.rage = 0; G.interact = null; G.lookAt = null; ui.showTitle(); setFace('normal');
@@ -35,7 +38,10 @@ export function preview(close) {
   Object.assign(CAM, { mode: 'orbit', center: { x: 3.0, y: close ? .75 : 1.3, z: 4.9 }, r: close ? 2.7 : 4.4, h: close ? 1.6 : 1.75, base: Math.PI, sway: close ? .7 : .45 });
 }
 
-function reset() { clearTimers(); hush(); ui.keysHint(false); Object.assign(G, { money: 0, counts: {}, nags: 0, maxCombo: 0, combo: 0, rage: 0, stress: 30, stressMax: 30, restocked: {}, clock: 0 }); R.t0 = Date.now(); R.co = copy(S.company); R.built = false; P.cheer = false; }
+function reset() {
+  clearTimers(); hush(); ui.keysHint(false); Object.assign(G, { money: 0, counts: {}, nags: 0, maxCombo: 0, combo: 0, rage: 0, stress: 30, stressMax: 30, restocked: {}, clock: 0, toys: false, emit: null, onAlarm: null });
+  R.t0 = Date.now(); R.co = copy(S.company); R.built = false; P.cheer = false; R.got = null; R.panel = false; resetToys(); ui.elev(null); ui.alarm(false);
+}
 function pickAlt(a, key) { const v = S[key] && a.includes(S[key]) ? a.find(x => x !== S[key]) : pick(a); S[key] = v; return v; }
 // 출근하기: 출근 → 오전 → 점심 → 오후 → 야근(사직서) → 건물 붕괴 → 청구서
 export function startCourse() {
@@ -105,17 +111,28 @@ function begin(id) {
 function playTick(dt) {
   updatePlayer(dt); tickMission(dt);
   if (MS.phase !== 'idle') G.clock += dt / 3;
-  if (G.tick % 6 === 0) { const h = missionHud(); ui.hud({ title: R.label, sub: R.sub || '', money: G.money, stress: G.stress, combo: G.combo, rage: G.rage, clock: fmtClock(G.clock), time: h.left != null ? '자유 난동 ' + h.left + '초 · 피해액 2배' : '', weapon: P.wdef ? P.wdef.n + (P.wdur ? ' ' + P.wdur : '') : '맨손' }); promptTick(); }
+  if (G.tick % 6 === 0) { const h = missionHud(); ui.hud({ title: R.label, sub: R.sub || '', money: G.money, stress: G.stress, combo: G.combo, rage: G.rage, clock: fmtClock(G.clock), time: h.left != null ? '자유 난동 ' + h.left + '초 · 피해액 2배' : '', weapon: weaponLabel() }); promptTick(); }
   if (G.tick % 30 === 0) setWallClock(G.clock);
 }
-// 임무 안내가 없을 때: 집기·엎기 안내
+// 임무 안내가 없을 때: 집기·엎기·타기·뿜기 안내
+const RIDE_HINT = {
+  pc: { chair: 'WASD 굴러가기 · 좌클릭 = 발 구르기 돌진 · 스페이스·E = 내리기', cart: 'WASD 밀기 · 좌클릭 = 힘껏 밀기 · E = 놓기', fork: 'W·S 앞뒤 · A·D 방향 · 좌클릭 = 포크 올리기 · 우클릭 = 내리기 · E = 내리기' },
+  mo: { chair: '조이스틱 = 굴러가기 · 때리기 = 발 구르기 · 점프 = 내리기', cart: '조이스틱 = 밀기 · 때리기 = 힘껏 밀기 · 행동 = 놓기', fork: '조이스틱 = 운전 · 때리기 = 포크 올리기 · 강타 = 내리기 · 행동 = 내리기' },
+};
 function promptTick() {
   if (ui.promptBusy()) return; const c = P.cand;
+  if (P.ride) return ui.hint(RIDE_HINT[G.mobile ? 'mo' : 'pc'][P.ride.kind]);
+  if (P.wdef && P.wdef.spray && !P.carry) return ui.hint(G.mobile ? '[때리기] 꾹 = 뿜기 · 아래를 보고 뿜으면 날아요' : '좌클릭 꾹 = 뿜기 · 아래를 보고 뿜으면 날아요', Math.max(.002, P.fuel / 100));
   if (P.seated) ui.hint(null);
   else if (P.carry) ui.hint('때리기 버튼 = 던지기 · E = 내려놓기');
-  else if (c && !c.dead) ui.hint(c.def.weapon ? `E  ${c.def.n} 들기` : c.def.flip ? `E 꾹  ${c.def.n} 엎기` : `E  ${c.def.n} 집어 들기`, c.def.flip ? P.eHold / .45 : 0);
+  else if (c && !c.dead) {
+    const d = c.def, ride = d.ride && G.toys, chair = ride && d.grab !== false;
+    const t = d.use ? `E  ${d.useN}` : ride && !chair ? `E  ${d.n} 타기` : chair ? (G.mobile ? `[행동] 집기 · 꾹 = ${d.n} 타기` : `E 집기 · E 꾹 = ${d.n} 타기`) : d.weapon ? `E  ${d.n} 들기` : d.flip ? `E 꾹  ${d.n} 엎기` : `E  ${d.n} 집어 들기`;
+    ui.hint(t, d.flip ? P.eHold / .45 : chair ? P.eHold / .35 : 0);
+  }
   else ui.hint(null);
 }
+const weaponLabel = () => P.ride ? { chair: '바퀴의자', cart: '택배 카트', fork: '지게차' }[P.ride.kind] : P.wdef ? P.wdef.n + (P.wdef.spray ? ' ' + Math.max(0, Math.ceil(P.fuel)) + '%' : P.wdur ? ' ' + P.wdur : '') : '맨손';
 // ⑤ 숨 고르기 → 도장 → 다음 시각
 function missionEnd(res) {
   const m = MISSIONS[R.list[R.i]];
@@ -158,20 +175,81 @@ function collapse() {
   after(8600, () => { P.cheer = false; bill(); });
 }
 
-// 자유 난동: 사무실 한 층 전체, 시간 제한 없음
-export function startFree() {
+// ───── 자유 난동: 고른 층에서 시작해 엘리베이터로 건물 전체를 오간다. 부순 건 층마다 그대로 남는다
+export function startFree(floor = 'office') {
+  if (!FLOORS[floor]) floor = 'office';
   reset(); R.mode = 'free'; R.course = false; ui.only(null); ui.hudShow(true); ui.band(null);
-  const sky = pick(['day', 'evening', 'night']); buildOffice(R.co, sky); spawnPlayer(S.char, 0, 5, Math.PI);
-  R.label = '자유 난동'; G.paused = false; G.mult = 1; G.clock = sky === 'night' ? 23 * 60 : sky === 'evening' ? 18 * 60 : 15 * 60;
-  ui.objectives(['회사 전체를 마음껏 부수세요', '무기: 방망이(복사실) · 골프채(부장실) · 오함마(로비)', '책상·탁자·캐비닛은 E 꾹 눌러 엎기', '끝내려면 일시정지 → 청구서'], -1);
-  const lines = [...COMMON]; R.co.sets.forEach(k => SETS[k] && lines.push(...SETS[k].l)); R.co.myLines.forEach(s => s.trim() && lines.push(s.trim()));
-  G.onTick = dt => {
-    updatePlayer(dt);
-    if (G.tick % 6 === 0) { ui.hud({ title: R.label, sub: R.co.name, money: G.money, stress: null, combo: G.combo, rage: G.rage, time: '시간 제한 없음', clock: '', weapon: P.wdef ? P.wdef.n + (P.wdur ? ' ' + P.wdur : '') : '맨손' }); promptTick(); }
-    if (G.tick % 620 === 300) say(R.co.who, pick(lines).replace('{who}: ', '').replace('{who}', R.co.who));
-    if (G.tick % 900 === 450) { const ph = G.props.filter(p => p.type === 'phone' && !p.dead); if (ph.length) { const p = pick(ph); sfx('ring'); p.punch = 10; fx.text({ x: p.body.position.x, y: p.body.position.y + .4, z: p.body.position.z }, '따르릉!', 'note'); } }
-  };
+  G.toys = true; G.paused = false; G.mult = 1;
+  R.sky = pick(['day', 'evening', 'night']); R.floor = R.startFloor = floor; R.snap = {}; R.wet = {}; R.ev = {}; R.got = new Set(); R.visited = new Set([floor]); R.moving = false;
+  G.clock = R.sky === 'night' ? 23 * 60 : R.sky === 'evening' ? 18 * 60 : 15 * 60;
+  R.lines = [...COMMON]; R.co.sets.forEach(k => SETS[k] && R.lines.push(...SETS[k].l)); R.co.myLines.forEach(s => s.trim() && R.lines.push(s.trim()));
+  enterFloor(floor); arrive();
   ui.keysHint(true); after(12000, () => ui.keysHint(false)); music('rage');
+  ui.tips(G.mobile
+    ? ['엘리베이터 안에 들어서면 다른 층 버튼이 나와요', '의자: 행동 꾹 = 올라타기 · 카트·지게차: 행동 = 타기', '소화기를 들고 때리기 꾹 — 아래를 보고 뿜으면 날아요', '빨간 비상벨을 누르면 스프링클러가 터져요']
+    : ['엘리베이터 안에 들어서면 층 버튼이 나와요 (숫자 키 1~4)', '의자: <b>E</b> 꾹 = 올라타기 · 카트·지게차: <b>E</b> = 타기', '소화기를 들고 <b>좌클릭</b> 꾹 — 아래를 보고 뿜으면 날아요', '빨간 비상벨을 누르면 스프링클러가 터져요']);
+}
+// 도착: 문이 열리고, 홀 쪽에서 본 카메라 앞으로 걸어 나온 뒤 등 뒤 시점으로
+function arrive() {
+  elev(true); sfx('ding'); P.auto = { x: EX, z: 6.7, spd: 1.8 };
+  camHold([EX + 2.3, 1.75, 4.9], [EX, 1.15, 9.2]);
+  after(1600, () => { if (R.mode === 'free' && !R.moving) camTo('follow', .7); });
+}
+function enterFloor(id) {
+  buildFloor(id, R.co, R.sky); applyFloor(R.snap[id]); resetToys(!!R.wet[id]);
+  spawnPlayer(S.char, EX, 9.95, Math.PI);
+  camHold([EX + 2.3, 1.75, 4.9], [EX, 1.15, 9.2]);
+  R.label = floorName(id); R.cabArm = false; R.panel = false; ui.elev(null);
+  G.emit = track; G.onAlarm = on => ui.alarm(on);
+  G.onBreak = p => { track('break:' + p.type); if (p.tag) track('tag:' + p.tag); };
+  G.onOut = p => { track('out'); track('out:' + p.type); if (p.tag) track('outtag:' + p.tag); };
+  G.onTick = freeTick; goalsHud();
+}
+function freeTick(dt) {
+  updatePlayer(dt); tickToys(dt);
+  if (G.tick % 6 === 0) { ui.hud({ title: R.label, sub: R.co.name, money: G.money, stress: null, combo: G.combo, rage: G.rage, time: '시간 제한 없음', clock: '', weapon: weaponLabel() }); promptTick(); }
+  // 엘리베이터: 다가가면 문이 열리고, 안에 들어서면 층 버튼(도착한 칸에서 한 번 나갔다 와야 뜬다)
+  if (!R.moving && G.elev && P.active) {
+    const pp = P.body.position, inCab = Math.abs(pp.x - G.elev.x) < .75 && pp.z > 9.3, near = Math.hypot(pp.x - G.elev.x, pp.z - 9.1) < 2.6;
+    if (pp.z < 8.4) R.cabArm = true;
+    elev(near || inCab);
+    const show = inCab && R.cabArm && !P.ride;
+    if (show !== R.panel) { R.panel = show; ui.elev(show ? { cur: R.floor, floors: FLOOR_IDS.map(id => ({ id, lv: FLOORS[id].lv, n: FLOORS[id].n })) } : null); }
+  }
+  if (G.tick % 620 === 300 && R.floor !== 'parking') say(R.co.who, pick(R.lines).replace('{who}: ', '').replace('{who}', R.co.who));
+  if (G.tick % 900 === 450) { const ph = G.props.filter(p => p.type === 'phone' && !p.dead); if (ph.length) { const p = pick(ph); sfx('ring'); p.punch = 10; fx.text({ x: p.body.position.x, y: p.body.position.y + .4, z: p.body.position.z }, '따르릉!', 'note'); } }
+}
+// 층 바꾸기: 문 닫힘 → 층 숫자 → 그 층을 다시 짓고(부순 기록을 입혀) → 문 열림. 든 무기·물건은 같이 간다
+export function goFloor(id) {
+  if (R.mode !== 'free' || R.moving || !FLOORS[id] || id === R.floor || P.ride) return;
+  R.moving = true; R.panel = false; ui.elev(null); elev(false); sfx('ding'); P.lock = 9999;
+  const keep = { weapon: P.weapon, wdur: P.wdur, fuel: P.fuel, carry: P.carry && P.carry !== true ? P.carry : null };
+  after(650, () => timeCut(floorLv(id), FLOORS[id].n, () => {
+    R.snap[R.floor] = snapshotFloor(keep.carry); R.wet[R.floor] = TOY.wet;
+    const c = keep.carry, carried = c ? { type: c.type, opt: Object.fromEntries(Object.entries(c.opt || {}).filter(([k]) => !['v', 'av', 'life', 'tag'].includes(k))) } : null;
+    R.floor = id; R.visited.add(id); enterFloor(id); P.lock = 9999;
+    if (keep.weapon) { equip(keep.weapon, { fuel: keep.fuel }); P.wdur = keep.wdur; }
+    if (carried) { const pp = P.body.position; carry(spawn(carried.type, pp.x, 2.4, pp.z, carried.opt)); }
+  }, () => { R.moving = false; P.lock = 0; arrive(); }));
+}
+const need = g => g.n === 'name' ? [...R.co.name].filter(ch => ch.trim()).length : (g.n || 1);
+function goalsHud() {
+  const f = FLOORS[R.floor], e = R.ev[R.floor] || {};
+  ui.goals(floorName(R.floor) + ' 도전과제', f.goals.map(g => ({ t: g.t, done: R.got.has(g.id), have: Math.min(e[g.k] || 0, need(g)), n: need(g) })), G.mobile ? '엘리베이터 = 다른 층' : '엘리베이터 안에서 숫자 키 = 다른 층');
+}
+function track(k, n = 1) {
+  if (R.mode !== 'free' || !R.got) return;
+  const e = R.ev[R.floor] || (R.ev[R.floor] = {}); e[k] = (e[k] || 0) + n;
+  let hit = false;
+  for (const g of FLOORS[R.floor].goals) {
+    if (g.k !== k) continue; hit = true;
+    if (!R.got.has(g.id) && e[k] >= need(g)) {
+      R.got.add(g.id); S.done = S.done || {}; S.done[g.id] = true; save();
+      const gain = 3000000 * G.mult, c = G.counts.goal || (G.counts.goal = { n: 0, sum: 0, name: '도전과제 보너스' }); G.money += gain; c.n++; c.sum += gain;
+      ui.goalToast(g.t, R.got.size); sfx('up'); later(18, () => sfx('stamp')); G.flash = Math.max(G.flash, 3);
+    }
+  }
+  if (hit) goalsHud();
 }
 
 export function bill() {
@@ -181,9 +259,10 @@ export function bill() {
   S.total += total; if (R.last === 'course') S.best = Math.max(S.best, total); S.runs++;
   for (const k in G.counts) S.counts[k] = (S.counts[k] || 0) + G.counts[k].n;
   save();
-  const r1 = rankOf(S.total);
-  ui.bill({ company: R.co.name, who: ui.charName(S.char), counts: G.counts, nags: G.nags, nagSum, total, maxCombo: G.maxCombo, sec: Math.round((Date.now() - R.t0) / 1000), promo: r1 > r0 ? RANKS[r1] : null, stressMax: was === 'free' ? null : G.stressMax, stressEnd: G.stress });
+  const r1 = rankOf(S.total), goals = was === 'free' && R.got ? { got: R.got.size, total: FLOOR_IDS.reduce((a, id) => a + FLOORS[id].goals.length, 0), floors: R.visited.size } : null;
+  if (P.ride) P.ride = null; resetToys(); ui.elev(null); R.panel = false;
+  ui.bill({ company: R.co.name, who: ui.charName(S.char), counts: G.counts, nags: G.nags, nagSum, total, maxCombo: G.maxCombo, sec: Math.round((Date.now() - R.t0) / 1000), promo: r1 > r0 ? RANKS[r1] : null, stressMax: was === 'free' ? null : G.stressMax, stressEnd: G.stress, goals });
   music('win');
 }
-export function again() { if (R.last === 'free') startFree(); else if (R.last === 'course') startCourse(); else startSingle(R.list[0]); }
+export function again() { if (R.last === 'free') startFree(R.startFloor); else if (R.last === 'course') startCourse(); else startSingle(R.list[0]); }
 void sit; void standUp;

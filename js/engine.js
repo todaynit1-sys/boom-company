@@ -7,7 +7,7 @@ import { sfx, buzz } from './audio.js';
 export { CANNON };
 
 export const PH = { world: null };
-export const GR = { STATIC: 1, PROP: 2, FRAG: 4, PLAYER: 8, PWALL: 16 };
+export const GR = { STATIC: 1, PROP: 2, FRAG: 4, PLAYER: 8, PWALL: 16, FORK: 32 };
 const DT = 1 / 60;
 let impacts = [], fragN = 0;
 
@@ -37,11 +37,12 @@ export function spawn(type, x, y, z, o = {}) {
   const g = new THREE.Group(); def.build(g, o, size); X.level.add(g);
   const body = new CANNON.Body({
     mass: fixed ? 0 : (o.mass || def.mass), material: PH.matD, allowSleep: true, sleepSpeedLimit: .3, sleepTimeLimit: .5, linearDamping: .06, angularDamping: .2,
-    collisionFilterGroup: kind === 'frag' ? GR.FRAG : GR.PROP, collisionFilterMask: kind === 'frag' ? (GR.STATIC | GR.PROP) : (GR.STATIC | GR.PROP | GR.FRAG | GR.PLAYER),
+    collisionFilterGroup: kind === 'frag' ? GR.FRAG : GR.PROP, collisionFilterMask: kind === 'frag' ? (GR.STATIC | GR.PROP | GR.FORK) : (GR.STATIC | GR.PROP | GR.FRAG | GR.PLAYER | GR.FORK),
   });
-  body.addShape(def.sphere ? new CANNON.Sphere(size[0] / 2) : new CANNON.Box(new CANNON.Vec3(size[0] / 2, size[1] / 2, size[2] / 2)));
+  // 자동차·지게차처럼 모양이 여러 개인 물건은 def.shapes가 직접 붙인다
+  if (def.shapes) def.shapes(body, size, CANNON); else body.addShape(def.sphere ? new CANNON.Sphere(size[0] / 2) : new CANNON.Box(new CANNON.Vec3(size[0] / 2, size[1] / 2, size[2] / 2)));
   body.position.set(x, y, z); if (o.ry) body.quaternion.setFromEuler(0, o.ry, 0);
-  const p = Object.assign({}, o, { type, def, kind, g, body, size, mat: o.mat || def.mat, hp: kind === 'frag' ? null : (o.hp ?? def.hp), price: o.price ?? def.price ?? 0, fixed, punch: 0, dead: false, born: G.tick });
+  const p = Object.assign({}, o, { type, def, kind, g, body, size, opt: o, mat: o.mat || def.mat, hp: kind === 'frag' ? null : (o.hp ?? def.hp), price: o.price ?? def.price ?? 0, fixed, punch: 0, dead: false, born: G.tick });
   p.maxHp = p.hp; body.p = p;
   if (kind !== 'frag') body.addEventListener('collide', onCollide);
   if (o.v) body.velocity.set(o.v.x, o.v.y, o.v.z);
@@ -55,7 +56,7 @@ export function release(p) { if (!p.fixed || p.def.fixedOnly) return; p.fixed = 
 export function setScreen(p, kind) { const s = p && p.g.userData.screen; if (s) s.material = screenMat(kind); if (p) p.screen = kind; }
 
 function onCollide(e) {
-  const p = e.target.p; if (!p || p.dead || p.hp == null || G.tick < G.settle) return;
+  const p = e.target.p; if (!p || p.dead || p.hp == null || G.tick < G.settle || G.tick - p.born < 20) return;
   const v = Math.abs(e.contact.getImpactVelocityAlongNormal()); if (v < 3.5) return;
   const ob = e.body, q = ob.p;
   let k = 1;
@@ -106,6 +107,8 @@ export function damage(p, dmg, pt, heavy, byPlayer) {
   p.hp -= dmg; p.punch = 7; p.body.wakeUp();
   G.onHit && G.onHit(p, dmg, heavy, byPlayer);
   if (p.dead) return;
+  // 맞을 때마다 단계가 바뀌는 물건(자동차 유리·문짝, 비상벨)
+  if (p.def.onDamage) { p.def.onDamage(p, dmg, heavy); if (p.dead) return; }
   if (p.hp <= 0) return breakProp(p);
   if (p.fixed && p.def.wall && p.hp / p.maxHp <= .5) release(p);
   if (dmg > 2) sfx(heavy ? MATS[p.mat].snd : 'punch', heavy ? .5 : .7);
@@ -142,7 +145,8 @@ function flush() {
 }
 const lv = new CANNON.Vec3(), wv = new CANNON.Vec3();
 function frags(p) {
-  let n = p.def.frag ?? 6; if (!n || !p.def.fm || !p.def.fm.length) return; if (G.mobile) n = Math.ceil(n * .6);
+  const fm = p.fm || p.def.fm;
+  let n = p.def.frag ?? 6; if (!n || !fm || !fm.length) return; if (G.mobile) n = Math.ceil(n * .6);
   const [w, h, d] = p.size, cell = Math.cbrt(w * h * d / n), nx = clamp(Math.round(w / cell), 1, 5), ny = clamp(Math.round(h / cell), 1, 5), nz = clamp(Math.round(d / cell), 1, 5);
   const b = p.body, cap = G.mobile ? 60 : 120;
   for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) for (let k = 0; k < nz; k++) {
@@ -151,7 +155,7 @@ function frags(p) {
     lv.set(-w / 2 + (i + .5) * sw, -h / 2 + (j + .5) * sh, -d / 2 + (k + .5) * sd); b.quaternion.vmult(lv, wv);
     const l = Math.hypot(wv.x, wv.y, wv.z) || 1, sp = rand(1.5, 5);
     const f = spawn('frag', b.position.x + wv.x, b.position.y + wv.y, b.position.z + wv.z, { size, mass: clamp(size[0] * size[1] * size[2] * 600, .1, 8), mat: p.mat, life: rand(360, 520) | 0, v: { x: b.velocity.x * .6 + wv.x / l * sp + rand(-1, 1), y: b.velocity.y * .6 + wv.y / l * sp + rand(1, 4), z: b.velocity.z * .6 + wv.z / l * sp + rand(-1, 1) }, av: { x: rand(-8, 8), y: rand(-8, 8), z: rand(-8, 8) } });
-    const mesh = bx(f.g, size[0], size[1], size[2], pick(p.def.fm)); mesh.castShadow = false; f.body.quaternion.copy(b.quaternion); fragN++;
+    const mesh = bx(f.g, size[0], size[1], size[2], pick(fm)); mesh.castShadow = false; f.body.quaternion.copy(b.quaternion); fragN++;
   }
 }
 const CMYK = ['#1aa7c7', '#d6338a', '#e8c41c', '#222222'];
@@ -167,7 +171,20 @@ function spill(p) {
     else if (k === 'soil') { fx.bitsAt(pos, n, '#4a3524', 3, 2.5); fx.stain(b.x, b.z, .35, '#4a3524', .5); }
     else if (k === 'water') { fx.bitsAt(pos, n, '#8fd0ff', 4.5, 4); fx.stain(b.x, b.z, 1.1, '#6fb6e8', .35); sfx('water'); }
     else if (k === 'balls') for (let i = 0; i < n; i++) spawn('ball', b.x + rand(-.1, .1), b.y + rand(0, .3), b.z + rand(-.1, .1), { life: 600, v: { x: rand(-4, 4), y: rand(2, 6), z: rand(-4, 4) } });
-    else if (k === 'boom') later(3, () => { explode(pos, n, a, 9); if (c === 'cmyk') CMYK.forEach(cc => fx.cloud(pos, 5, cc, 1.1, .6)); else fx.cloud(pos, 16, c, 1.2, .7); fx.stain(b.x, b.z, n * .35, c === 'cmyk' ? '#222222' : '#ffffff', .45); sfx('boom', .9); });
+    else if (k === 'boom') later(3, () => {
+      explode(pos, n, a, 9); sfx('boom', .9);
+      if (c === 'cmyk') CMYK.forEach(cc => fx.cloud(pos, 5, cc, 1.1, .6));
+      else if (c === 'fire') { fx.cloud(pos, 10, '#ff7a1a', 1.3, .7); fx.cloud(pos, 8, '#2a2522', 1.8, .9); fx.sparks(pos, 30); G.flash = Math.max(G.flash, 4); }
+      else fx.cloud(pos, 16, c, 1.2, .7);
+      fx.stain(b.x, b.z, n * .35, c === 'cmyk' || c === 'fire' ? '#222222' : '#ffffff', .45);
+    });
+    // 자동차가 끝내 터질 때
+    else if (k === 'carboom') later(4, () => { explode(pos, 6, 70, 13); fx.cloud(pos, 14, '#ff7a1a', 1.8, 1.2); fx.cloud(pos, 12, '#26221f', 2.4, 1.4); fx.sparks(pos, 40); fx.stain(b.x, b.z, 2.4, '#1a1a1a', .55); sfx('boom'); later(8, () => sfx('boom', .8)); G.shake = Math.max(G.shake, .6); G.flash = 6; buzz([60, 40, 120]); });
+    else if (k === 'fish') { fx.bitsAt(pos, n, '#ff8a1f', 3.5, 4); fx.text({ x: pos.x, y: pos.y + .6, z: pos.z }, '파닥파닥', 'note'); }
+    else if (k === 'books') { fx.bitsAt(pos, n, '#7a2030', 3, 3); fx.bitsAt(pos, n, '#1f3f6b', 3, 3); fx.sheet(pos, n >> 1, '#fbfaf5', 2.5); }
+    else if (k === 'cream') { fx.bitsAt(pos, n, '#fff3df', 3.5, 3); fx.bitsAt(pos, n >> 1, '#e0303f', 3, 3); fx.stain(b.x, b.z, .6, '#f3e2c6', .6); }
+    else if (k === 'cans') { for (const cc of ['#c9281f', '#2f6bff', '#ffd84d', '#2a8a45']) fx.bitsAt(pos, n >> 2, cc, 4, 4); }
+    else if (k === 'coins') fx.bitsAt(pos, n, '#e3b23c', 3.5, 4);
   }
 }
 export function explode(c, r, dmg, push) {
@@ -209,12 +226,12 @@ export function tick() {
       else kill(p);
     } else if (p.life != null && p.life < 30 && p.type !== 'frag') { const s = p.life / 30; p.g.scale.set(s, s, s); }
     if (p.hp != null && p.def.elec && p.hp / p.maxHp < .5 && G.tick % 14 === 0) { fx.cloud({ x: b.position.x, y: b.position.y + p.size[1] / 2, z: b.position.z }, 1, '#444444', .35, .1); if (p.hp / p.maxHp < .25 && G.tick % 28 === 0) fx.sparks(b.position, 4); }
-    const bp = b.position, inCab = G.elev && Math.abs(bp.x - G.elev.x) < .9 && bp.z < 10.9 && bp.y > -1;
-    if (!p.fixed && !p.held && G.scene === 'office' && !inCab && (bp.z < -9.5 || bp.x < -14.4 || bp.x > 14.4 || bp.z > 9.4 || bp.y < -3)) {
+    const bp = b.position, inCab = G.elev && Math.abs(bp.x - G.elev.x) < .9 && bp.z < 10.9 && bp.y > -1, oz = G.outZone;
+    if (!p.fixed && !p.held && oz && !inCab && (bp.z < oz.z0 || bp.x < -oz.x || bp.x > oz.x || bp.z > oz.z1 || bp.y < -3)) {
       if (!p.out && p.kind === 'obj') {
-        p.out = true; const gain = Math.max(p.price, 20000) * 2 * G.mult; G.money += gain; addCombo(2);
+        p.out = true; const gain = Math.max(p.price, 20000) * (oz.k || 2) * G.mult; G.money += gain; addCombo(2);
         const c = G.counts.out || (G.counts.out = { n: 0, sum: 0, name: '창밖으로 던진 물건' }); c.n++; c.sum += gain;
-        fx.text({ x: clamp(bp.x, -13, 13), y: 2.2, z: Math.max(bp.z, -8.6) }, '창밖으로! +' + won(gain), 'money'); sfx('up', .6); G.onOut && G.onOut(p);
+        fx.text({ x: clamp(bp.x, -13, 13), y: 2.2, z: clamp(bp.z, -8.6, 8.6) }, oz.label + ' +' + won(gain), 'money'); sfx('up', .6); G.onOut && G.onOut(p);
       }
       if (bp.y < -6) kill(p);
     } else if (bp.y < -30) kill(p);

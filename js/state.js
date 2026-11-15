@@ -6,6 +6,8 @@ export const G = {
   settle: 0, paused: true, userPause: false, calm: false, mobile: false, auto: false,
   onTick: null, onBreak: null, onHit: null,
   camBlock: [], zone: null,
+  // 층마다 다른 것: 창밖 보너스 구역, 카메라 천장, 스프링클러 머리. toys = 자유 난동의 놀거리 켜기
+  outZone: null, ceil: 2.86, ceilH: 3, heads: null, toys: false, emit: null, onAlarm: null,
 };
 export const rand = (a = 1, b) => b === undefined ? Math.random() * a : a + Math.random() * (b - a);
 export const pick = a => a[Math.random() * a.length | 0];

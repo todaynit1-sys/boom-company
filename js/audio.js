@@ -50,6 +50,12 @@ const SFX = {
   step(v, p) { noise(.035, v * .5, 'lowpass', 500 * p); },
   ding(v) { tone(1320, 1320, .5, v * .25, 'sine'); tone(990, 990, .6, v * .2, 'sine', .22); },
   special(v) { tone(200, 900, .35, v * .4, 'sawtooth'); noise(.35, v * .3, 'bandpass', 600, 1, 0, 3000); },
+  // 놀거리: 비상벨·차 경보·소화기·지게차·바퀴
+  bell(v) { for (let i = 0; i < 7; i++) { tone(2350, 2350, .035, v * .09, 'square', i * .055); tone(1760, 1760, .03, v * .06, 'square', i * .055 + .027); } },
+  caralarm(v) { tone(880, 1560, .22, v * .1, 'sawtooth'); tone(1560, 880, .22, v * .1, 'sawtooth', .23); },
+  spray(v, p) { noise(.14, v * .22, 'highpass', 2600 * p); noise(.1, v * .1, 'bandpass', 900, 1); },
+  hum(v, p) { tone(62 * p, 66 * p, .22, v * .2, 'sawtooth'); noise(.2, v * .12, 'lowpass', 260); },
+  roll(v, p) { noise(.12, v * .14, 'lowpass', 380 * p); },
 };
 export function sfx(name, vol = 1, k) {
   if (!ac || S.mute || !SFX[name]) return;
