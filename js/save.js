@@ -4,7 +4,7 @@ export const copy = o => JSON.parse(JSON.stringify(o));
 function load() {
   let d = {};
   try { d = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
-  return Object.assign({ total: 0, best: 0, runs: 0, char: 'kim', charName: {}, acc: null, company: copy(DEF_COMPANY), slots: [null, null, null], mute: false, voice: true, haptic: true, calm: false, seenHelp: false, counts: {} }, d);
+  return Object.assign({ total: 0, best: 0, runs: 0, char: 'kim', charName: {}, acc: null, company: copy(DEF_COMPANY), slots: [null, null, null], mute: false, bgm: true, haptic: true, calm: false, seenHelp: false, counts: {}, lastAm: null, lastPm: null, skipArrive: false }, d);
 }
 export const S = load();
 export function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }

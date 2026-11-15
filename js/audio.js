@@ -1,5 +1,6 @@
 import { S } from './save.js';
 let ac, nb, touched = false; const last = {};
+export const actx = () => ac;
 export function unlock() {
   touched = true;
   if (!ac) {

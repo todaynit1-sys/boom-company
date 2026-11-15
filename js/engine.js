@@ -126,13 +126,27 @@ export function breakProp(p) {
   G.onBreak && G.onBreak(p);
 }
 
+// 다 떨어진 조각은 사라지지 않고 바닥의 잔해(물리 없음)로 굳는다
+const white = new THREE.Color('#ffffff');
+function toDebris(p) {
+  const mesh = p.g.children[0], m = mesh && mesh.material, c = new THREE.Color();
+  if (m && !m.map) c.copy(m.color); else c.set(MATS[p.mat].bit);
+  if (m && m.transparent) c.lerp(white, .35);
+  fx.debris(p, c);
+}
+export function settleFrags() { for (const p of G.props) if (p.type === 'frag' && !p.dead) { toDebris(p); kill(p); } flush(); }
+function flush() {
+  if (!G.removeQ.length) return;
+  for (const p of G.removeQ) { PH.world.removeBody(p.body); X.level.remove(p.g); if (p.type === 'frag' && !p.counted) fragN--; }
+  G.removeQ = []; G.props = G.props.filter(p => !p.dead);
+}
 const lv = new CANNON.Vec3(), wv = new CANNON.Vec3();
 function frags(p) {
   let n = p.def.frag ?? 6; if (!n || !p.def.fm || !p.def.fm.length) return; if (G.mobile) n = Math.ceil(n * .6);
   const [w, h, d] = p.size, cell = Math.cbrt(w * h * d / n), nx = clamp(Math.round(w / cell), 1, 5), ny = clamp(Math.round(h / cell), 1, 5), nz = clamp(Math.round(d / cell), 1, 5);
   const b = p.body, cap = G.mobile ? 60 : 120;
   for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) for (let k = 0; k < nz; k++) {
-    if (fragN >= cap) { const old = G.props.find(q => q.type === 'frag' && !q.dead); if (old) { kill(old); fragN--; old.counted = true; } }
+    if (fragN >= cap) { const old = G.props.find(q => q.type === 'frag' && !q.dead); if (old) { toDebris(old); kill(old); fragN--; old.counted = true; } }
     const sw = w / nx, sh = h / ny, sd = d / nz, size = [Math.max(.03, sw * rand(.55, .95)), Math.max(.03, sh * rand(.55, .95)), Math.max(.03, sd * rand(.55, .95))];
     lv.set(-w / 2 + (i + .5) * sw, -h / 2 + (j + .5) * sh, -d / 2 + (k + .5) * sd); b.quaternion.vmult(lv, wv);
     const l = Math.hypot(wv.x, wv.y, wv.z) || 1, sp = rand(1.5, 5);
@@ -190,10 +204,13 @@ export function tick() {
       const v = b.velocity, sp = v.length(); if (sp > 32) v.scale(32 / sp, v);
     }
     if (p.punch > 0) { p.punch--; const s = 1 + p.punch * .012; p.g.scale.set(s, s, s); }
-    if (p.life != null) { if (--p.life <= 0) kill(p); else if (p.life < 30) { const s = p.life / 30; p.g.scale.set(s, s, s); } }
+    if (p.life != null && --p.life <= 0) {
+      if (p.type === 'frag') { if (b.velocity.lengthSquared() > .2 && (p.ext = (p.ext || 0) + 1) < 4) p.life = 60; else { toDebris(p); kill(p); } }
+      else kill(p);
+    } else if (p.life != null && p.life < 30 && p.type !== 'frag') { const s = p.life / 30; p.g.scale.set(s, s, s); }
     if (p.hp != null && p.def.elec && p.hp / p.maxHp < .5 && G.tick % 14 === 0) { fx.cloud({ x: b.position.x, y: b.position.y + p.size[1] / 2, z: b.position.z }, 1, '#444444', .35, .1); if (p.hp / p.maxHp < .25 && G.tick % 28 === 0) fx.sparks(b.position, 4); }
-    const bp = b.position;
-    if (!p.fixed && !p.held && G.scene === 'office' && (bp.z < -9.5 || bp.x < -14.4 || bp.x > 14.4 || bp.z > 9.4 || bp.y < -3)) {
+    const bp = b.position, inCab = G.elev && Math.abs(bp.x - G.elev.x) < .9 && bp.z < 10.9 && bp.y > -1;
+    if (!p.fixed && !p.held && G.scene === 'office' && !inCab && (bp.z < -9.5 || bp.x < -14.4 || bp.x > 14.4 || bp.z > 9.4 || bp.y < -3)) {
       if (!p.out && p.kind === 'obj') {
         p.out = true; const gain = Math.max(p.price, 20000) * 2 * G.mult; G.money += gain; addCombo(2);
         const c = G.counts.out || (G.counts.out = { n: 0, sum: 0, name: '창밖으로 던진 물건' }); c.n++; c.sum += gain;
@@ -202,10 +219,7 @@ export function tick() {
       if (bp.y < -6) kill(p);
     } else if (bp.y < -30) kill(p);
   }
-  if (G.removeQ.length) {
-    for (const p of G.removeQ) { PH.world.removeBody(p.body); X.level.remove(p.g); if (p.type === 'frag' && !p.counted) fragN--; }
-    G.removeQ = []; G.props = G.props.filter(p => !p.dead);
-  }
+  flush();
   fx.update(dt);
   if (G.comboT > 0 && --G.comboT === 0) G.combo = 0;
   G.shake *= .86; if (G.shake < .004) G.shake = 0;

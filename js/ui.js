@@ -3,6 +3,7 @@ import { CHARS, ACCS } from './data/chars.js';
 import { SETS, WHOS, MOTTOS } from './data/lines.js';
 import { G, won } from './state.js';
 import { sfx } from './audio.js';
+import { refreshMusic } from './music.js';
 
 export const act = {};
 const $ = id => document.getElementById(id);
@@ -27,17 +28,18 @@ export function toast(s) { const t = $('toast'); t.textContent = s; t.classList.
 
 // ───── 첫 화면
 export function showTitle() {
-  only('s-title'); hudShow(false); over(''); objectives(null); prompt(null); subtitle(null);
+  only('s-title'); hudShow(false); over(''); objectives(null); prompt(null); subtitle(null); clearTips(); show('tip', false);
   const r = rankOf(S.total), nx = RANKS[r + 1];
   $('t-rank').textContent = RANKS[r].n;
   $('t-rankbar').style.width = (nx ? Math.min(100, (S.total - RANKS[r].at) / (nx.at - RANKS[r].at) * 100) : 100) + '%';
   $('t-total').textContent = '누적 피해액 ' + won(S.total);
-  $('o-snd').checked = !S.mute; $('o-voice').checked = S.voice; $('o-hap').checked = S.haptic; $('o-calm').checked = S.calm;
+  $('o-snd').checked = !S.mute; $('o-bgm').checked = S.bgm !== false; $('o-hap').checked = S.haptic; $('o-calm').checked = S.calm; $('o-skip').checked = !!S.skipArrive;
+  show('o-skipw', S.runs > 0);
 }
 function showPick(missions, ids) {
   only('s-pick'); const box = $('pk-list'); box.textContent = '';
   for (const id of [...ids, 'resign']) {
-    const m = missions[id], b = el('button', 'pk'); b.appendChild(el('small', '', m.time)); b.appendChild(el('b', '', m.n)); b.appendChild(el('span', '', m.sub + ' · ' + m.steps.length + '단계'));
+    const m = missions[id], b = el('button', 'pk'); b.appendChild(el('small', '', act.clock(m.clock[0] * 60 + m.clock[1]))); b.appendChild(el('b', '', m.n)); b.appendChild(el('span', '', m.sub + ' · ' + m.steps.filter(s => !s.hide).length + '단계'));
     b.onclick = () => act.single(id); box.appendChild(b);
   }
 }
@@ -74,12 +76,28 @@ function fillChars() {
 export function showChars() { only('s-chars'); fillChars(); act.preview(true); }
 
 // ───── 게임 중 표시
-export function hudShow(on) { show('hud', on); show('status', on); show('pad', on && G.mobile); show('cross', on && !G.mobile); if (!on) { show('keys', false); show('obj', false); } }
-export function keysHint(on) { if (G.mobile) return; const k = $('keys'); k.innerHTML = '<b>WASD</b>이동<b>마우스</b>시점(화면을 클릭하면 고정)<b>스페이스</b>점프<br><b>좌클릭</b>때리기<b>우클릭</b>강타<b>E</b>집기·던지기·엎기<b>Q</b>필살기'; show('keys', on); }
+export function hudShow(on) { show('hud', on); show('status', on); show('pad', on && G.mobile); show('cross', on && !G.mobile); if (!on) { show('keys', false); show('obj', false); show('band', false); $('vig').style.opacity = 0; } }
+// 시계 넘김: 화면이 검게 됐다가 시각이 크게 뜬다
+export function fade(on, instant) {
+  const f = $('fade');
+  if (on) { f.classList.remove('off', 'show'); f.style.transition = 'none'; f.style.opacity = 0; void f.offsetWidth; f.style.transition = 'opacity .42s'; f.style.opacity = 1; return; }
+  if (instant) { f.style.transition = 'none'; f.style.opacity = 0; f.classList.add('off'); return; }
+  f.style.transition = 'opacity .42s'; f.style.opacity = 0; setTimeout(() => { if (f.style.opacity === '0') f.classList.add('off'); }, 460);
+}
+export function fadeText(time, title) { $('fade-time').textContent = time; $('fade-title').textContent = title; const f = $('fade'); f.classList.remove('show'); void f.offsetWidth; f.classList.add('show'); }
+export function band(slot) { const b = $('band'); if (slot == null) return show('band', false); show('band', true); [...b.children].forEach((e, k) => { e.className = k < slot ? 'done' : k === slot ? 'now' : ''; }); }
+// 조작 안내를 한 줄씩
+const tq = []; let tBusy = false;
+export function tips(list) { tq.push(...list); if (!tBusy) nextTip(); }
+function nextTip() { const t = $('tip'); if (!tq.length) { tBusy = false; show('tip', false); return; } tBusy = true; t.innerHTML = tq.shift(); show('tip', true); t.style.animation = 'none'; void t.offsetWidth; t.style.animation = ''; setTimeout(nextTip, 3300); }
+export function clearTips() { tq.length = 0; }
+export function boil() { const b = $('h-stressbox'); b.classList.remove('boil'); void b.offsetWidth; b.classList.add('boil'); }
+export function keysHint(on) { if (G.mobile || !on) return show('keys', false); const k = $('keys'); k.innerHTML = '<b>WASD</b>이동<b>마우스</b>시점(화면을 클릭하면 고정)<b>스페이스</b>점프<br><b>좌클릭</b>때리기<b>우클릭</b>강타<b>E</b>집기·던지기·엎기<b>Q</b>필살기'; show('keys', on); }
 let last = {};
 export function hud(d) {
   const set = (id, k, v) => { if (last[k] !== v) { last[k] = v; $(id).textContent = v; } };
-  set('h-title', 'f', d.title); set('h-sub', 's', d.sub); set('h-money', 'm', won(d.money)); set('h-time', 't', d.time);
+  set('h-title', 'f', d.title); set('h-sub', 's', d.sub); set('h-money', 'm', won(d.money)); set('h-time', 't', d.time); set('h-clock', 'k', d.clock || '');
+  const vg = d.stress == null ? 0 : Math.max(0, Math.min(1, (d.stress - 55) / 45)) * .9; if (last.vg !== vg) { last.vg = vg; $('vig').style.opacity = vg; }
   set('h-combo', 'c', d.combo >= 5 ? '연타 ' + d.combo + (d.combo >= 15 ? ' ×' + (d.combo >= 80 ? 2 : d.combo >= 40 ? 1.5 : 1.2) : '') : '');
   set('h-weapon', 'w', d.weapon || '');
   const has = d.stress != null; if (last.has !== has) { last.has = has; $('h-stressbox').style.visibility = has ? 'visible' : 'hidden'; }
@@ -107,7 +125,7 @@ export function hint(text, prog = 0) {
   const b = p.lastElementChild; b.style.display = prog > 0 ? 'block' : 'none'; b.firstElementChild.style.width = Math.min(100, prog * 100) + '%';
 }
 let subT;
-export function subtitle(who, text) { const s = $('subt'); clearTimeout(subT); if (!text) return show('subt', false); show('subt', true); s.firstElementChild.textContent = who; s.lastElementChild.textContent = text; subT = setTimeout(() => show('subt', false), 1400 + text.length * 110); }
+export function subtitle(who, text) { const s = $('subt'); clearTimeout(subT); if (!text) return show('subt', false); show('subt', true); s.firstElementChild.textContent = who; s.lastElementChild.textContent = text; s.classList.remove('pop'); void s.offsetWidth; s.classList.add('pop'); subT = setTimeout(() => show('subt', false), 2100 + text.length * 95); }
 let overT;
 export function over(html) { clearTimeout(overT); $('over').innerHTML = html; }
 export function card(small, title, sub, rows, cb) {
@@ -134,6 +152,7 @@ export function bill(d) {
   items.forEach(([a, c], i) => { const li = el('div', 'li'); li.style.animationDelay = (.3 + i * .13) + 's'; li.appendChild(el('span', '', a)); li.appendChild(el('span', '', c)); b.appendChild(li); setTimeout(() => sfx('type'), 300 + i * 130); });
   const sum = el('div', 'sum'); sum.appendChild(el('span', '', '합계')); sum.appendChild(el('b', '', won(d.total))); b.appendChild(sum);
   const ex = el('div', 'ex'); ex.appendChild(el('span', '', '최고 연타 ' + d.maxCombo)); ex.appendChild(el('span', '', '걸린 시간 ' + Math.floor(d.sec / 60) + '분 ' + (d.sec % 60) + '초')); b.appendChild(ex);
+  if (d.stressMax != null) { const sx = el('div', 'ex'); sx.appendChild(el('span', '', '하루 스트레스 최고 ' + Math.round(d.stressMax) + '%')); sx.appendChild(el('span', '', '퇴근할 때 ' + Math.round(d.stressEnd) + '%')); b.appendChild(sx); }
   const seal = el('div', 'seal' + (rankOf(S.total) >= 7 ? ' gold' : ''), '전액'); seal.appendChild(document.createElement('br')); seal.appendChild(document.createTextNode('회사 부담')); b.appendChild(seal);
   setTimeout(() => sfx('stamp'), 1650);
   b.appendChild(el('div', 'title', '「' + TITLES.find(t => d.total < t[0])[1] + '」'));
@@ -162,8 +181,9 @@ export function fake(on) {
 export function init(missions, ids) {
   $('b-course').onclick = () => act.course(); $('b-pick').onclick = () => showPick(missions, ids); $('b-free').onclick = () => act.free();
   $('b-build').onclick = showBuilder; $('b-chars').onclick = showChars; $('pk-back').onclick = () => only('s-title');
-  $('o-snd').onchange = e => { S.mute = !e.target.checked; save(); }; $('o-voice').onchange = e => { S.voice = e.target.checked; save(); };
+  $('o-snd').onchange = e => { S.mute = !e.target.checked; save(); refreshMusic(); }; $('o-bgm').onchange = e => { S.bgm = e.target.checked; save(); refreshMusic(); };
   $('o-hap').onchange = e => { S.haptic = e.target.checked; save(); }; $('o-calm').onchange = e => { S.calm = e.target.checked; G.calm = S.calm; save(); };
+  $('o-skip').onchange = e => { S.skipArrive = e.target.checked; save(); };
   const B = () => S.company;
   $('c-name').oninput = e => { B().name = e.target.value.trim() || DEF_COMPANY.name; save(); };
   $('c-who2').oninput = e => { B().who = e.target.value.trim() || '부장님'; save(); }; $('c-who2').onchange = fillBuilder;

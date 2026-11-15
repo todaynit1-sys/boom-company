@@ -3,9 +3,9 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { G } from './state.js';
 export { THREE };
-export const X = { renderer: null, scene: null, camera: null, sun: null, hemi: null, level: null };
+export const X = { renderer: null, scene: null, camera: null, sun: null, hemi: null, level: null, lamps: [] };
 const mats = {}, geos = {}, texs = {};
-const FONT = '"Noto Sans KR",sans-serif', TITLE = '"Black Han Sans","Noto Sans KR",sans-serif';
+export const FONT = '"Noto Sans KR",sans-serif', TITLE = '"Black Han Sans","Noto Sans KR",sans-serif';
 
 export function canvasTex(w, h, fn, rep) {
   const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), w, h);
@@ -13,7 +13,7 @@ export function canvasTex(w, h, fn, rep) {
   if (rep) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); }
   return t;
 }
-function speckle(c, w, h, n, a, dark = true) { for (let i = 0; i < n; i++) { c.fillStyle = `rgba(${dark ? '0,0,0' : '255,255,255'},${Math.random() * a})`; c.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 2, 1 + Math.random() * 2); } }
+export function speckle(c, w, h, n, a, dark = true) { for (let i = 0; i < n; i++) { c.fillStyle = `rgba(${dark ? '0,0,0' : '255,255,255'},${Math.random() * a})`; c.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 2, 1 + Math.random() * 2); } }
 const TEX = {
   carpet: () => canvasTex(256, 256, (c, w, h) => { c.fillStyle = '#566070'; c.fillRect(0, 0, w, h); speckle(c, w, h, 5000, .2); speckle(c, w, h, 2500, .06, false); c.strokeStyle = 'rgba(0,0,0,.14)'; c.lineWidth = 2; c.strokeRect(0, 0, w, h); }, [28, 18]),
   wood: () => canvasTex(256, 256, (c, w, h) => { c.fillStyle = '#c8a070'; c.fillRect(0, 0, w, h); for (let i = 0; i < 90; i++) { c.strokeStyle = `rgba(90,55,20,${Math.random() * .16})`; c.lineWidth = 1 + Math.random() * 3; const y = Math.random() * h; c.beginPath(); c.moveTo(0, y); c.bezierCurveTo(w * .3, y + Math.random() * 8 - 4, w * .6, y + Math.random() * 8 - 4, w, y + Math.random() * 6 - 3); c.stroke(); } }),
@@ -35,7 +35,8 @@ const MATDEF = {
   ceramic: { color: '#f4f2ec', roughness: .25 }, cardboard: { map: 'cardboard', roughness: .9 }, paper: { color: '#fbfaf5', roughness: .9 }, paperSide: { color: '#dcd9d0', roughness: .9 },
   leaf: { color: '#2f7d3c', roughness: .7 }, pot: { color: '#b9603c', roughness: .8 }, soil: { color: '#4a3524', roughness: 1 },
   red: { color: '#c9281f', roughness: .4 }, green: { color: '#2a8a45', roughness: .3, transparent: true, opacity: .85 }, beer: { color: '#e8b53a', roughness: .1, transparent: true, opacity: .8 }, water: { color: '#8fd0ff', roughness: .05, transparent: true, opacity: .55 },
-  rubber: { color: '#151515', roughness: .9 }, white: { color: '#ffffff', roughness: .5 }, coffee: { color: '#4a2c17', roughness: .3 }, lightPanel: { color: '#ffffff', emissive: '#fff6e0', emissiveIntensity: 1.6 },
+  rubber: { color: '#151515', roughness: .9 }, white: { color: '#ffffff', roughness: .5 }, coffee: { color: '#4a2c17', roughness: .3 },
+  lightPanel: { color: '#ffffff', emissive: '#fff6e0', emissiveIntensity: 1.6 }, lightPanelOn: { color: '#ffffff', emissive: '#fff6e0', emissiveIntensity: 1.6 },
   skin: { color: '#e8b895', roughness: .7 }, shirt: { color: '#f3f1ec', roughness: .8 }, pants: { color: '#2b2f3a', roughness: .85 }, shoe: { color: '#1b1b1d', roughness: .4 }, hair: { color: '#1d1a18', roughness: .7 },
   concrete: { color: '#a9a7a0', roughness: .95 }, brick: { color: '#a8523c', roughness: .95 }, bglass: { color: '#7fb4d6', roughness: .1, metalness: .5 }, winLit: { color: '#fff3c4', emissive: '#ffe9a0', emissiveIntensity: .8 }, asphalt: { color: '#5f6360', roughness: 1 },
 };
@@ -63,9 +64,46 @@ export function textMat(text, o = {}) {
     c.fillStyle = o.fg || '#2a2522'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, w / 2, h / 2 + size * .04);
   }, o.lit !== false);
 }
+
+// ───── 모니터·단말기 화면
+function wrap(c, s, maxW) { const out = []; let line = ''; for (const ch of s) { if (c.measureText(line + ch).width > maxW && line) { out.push(line); line = ch; } else line += ch; } if (line) out.push(line); return out; }
+function dialog(c, w, h, title, body, color) {
+  const dw = 300, dh = 120, x = (w - dw) / 2, y = (h - dh) / 2;
+  c.fillStyle = 'rgba(0,0,0,.25)'; c.fillRect(x + 6, y + 6, dw, dh);
+  c.fillStyle = '#fff'; c.fillRect(x, y, dw, dh); c.fillStyle = color; c.fillRect(x, y, dw, 30);
+  c.fillStyle = '#fff'; c.font = '700 17px ' + FONT; c.textAlign = 'left'; c.fillText(title, x + 12, y + 21);
+  c.fillStyle = '#222'; c.font = '700 21px ' + FONT; c.textAlign = 'center'; c.fillText(body, w / 2, y + 78);
+  return { x, y, dw, dh };
+}
+function workBase(c, w, h, file = '업무_정리_최종.xlsx') {
+  c.fillStyle = '#fff'; c.fillRect(0, 0, w, h); c.fillStyle = '#1f7a46'; c.fillRect(0, 0, w, 40);
+  c.fillStyle = '#fff'; c.font = '700 18px ' + FONT; c.textAlign = 'left'; c.fillText(file, 12, 27);
+  c.strokeStyle = '#d3dad3'; c.lineWidth = 1; for (let y = 64; y < h; y += 24) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); } for (let x = 0; x < w; x += 80) { c.beginPath(); c.moveTo(x, 40); c.lineTo(x, h); c.stroke(); }
+  c.fillStyle = '#e9f2ec'; c.fillRect(0, 40, w, 24); c.fillStyle = '#556'; c.font = '500 13px ' + FONT;
+  for (let r = 0; r < 10; r++) for (let k = 1; k < 6; k++) if ((r * 7 + k * 3) % 4) c.fillText(((r * 7919 + k * 104729) % 90000 + 1000).toLocaleString(), k * 80 + 8, 82 + r * 24);
+}
+function docBase(c, w, h) {
+  c.fillStyle = '#d9dde2'; c.fillRect(0, 0, w, h); c.fillStyle = '#2f4f7f'; c.fillRect(0, 0, w, 34);
+  c.fillStyle = '#fff'; c.font = '700 16px ' + FONT; c.textAlign = 'left'; c.fillText('문서 편집기', 10, 23);
+  c.fillStyle = '#fff'; c.fillRect(w * .16, 46, w * .68, h - 46);
+  c.fillStyle = '#222'; c.font = '700 22px ' + FONT; c.textAlign = 'center'; c.fillText('보고서_v7_진짜최종', w / 2, 82);
+  c.fillStyle = '#9aa0a8'; for (let i = 0; i < 9; i++) c.fillRect(w * .21, 104 + i * 22, w * (.5 + ((i * 37) % 9) / 50), 7);
+  c.strokeStyle = '#e5342b'; c.lineWidth = 2; for (const i of [2, 5]) { c.beginPath(); for (let x = w * .3; x < w * .55; x += 6) c.lineTo(x, 115 + i * 22 + (x / 6 % 2 ? 2 : -1)); c.stroke(); }
+}
 const SCREENS = {
   update: (c, w, h) => { c.fillStyle = '#1857d6'; c.fillRect(0, 0, w, h); c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = '700 30px ' + FONT; c.fillText('업데이트 중입니다', w / 2, h * .42); c.font = '700 64px ' + FONT; c.fillText('37%', w / 2, h * .68); c.font = '500 18px ' + FONT; c.fillText('PC를 끄지 마세요', w / 2, h * .84); },
-  sheet: (c, w, h) => { c.fillStyle = '#fff'; c.fillRect(0, 0, w, h); c.fillStyle = '#1f7a46'; c.fillRect(0, 0, w, 44); c.fillStyle = '#fff'; c.font = '700 20px ' + FONT; c.textAlign = 'left'; c.fillText('보고서_최종_진짜최종_v7.xlsx', 12, 30); c.strokeStyle = '#cfd6cf'; c.lineWidth = 1; for (let y = 70; y < h; y += 26) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); } for (let x = 0; x < w; x += 84) { c.beginPath(); c.moveTo(x, 44); c.lineTo(x, h); c.stroke(); } c.fillStyle = 'rgba(255,255,255,.82)'; c.fillRect(0, 44, w, h); c.fillStyle = '#fff'; c.strokeStyle = '#888'; c.lineWidth = 2; c.fillRect(w * .2, h * .36, w * .6, h * .34); c.strokeRect(w * .2, h * .36, w * .6, h * .34); c.fillStyle = '#333'; c.textAlign = 'center'; c.font = '700 26px ' + FONT; c.fillText('응답 없음', w / 2, h * .52); c.font = '500 16px ' + FONT; c.fillText('프로그램이 응답하지 않습니다', w / 2, h * .62); },
+  sheet: (c, w, h) => { workBase(c, w, h, '보고서_최종_진짜최종_v7.xlsx'); c.fillStyle = 'rgba(255,255,255,.7)'; c.fillRect(0, 40, w, h); dialog(c, w, h, '응답 없음', '프로그램이 응답하지 않습니다', '#6b7280'); },
+  work: (c, w, h) => workBase(c, w, h),
+  doc: (c, w, h) => docBase(c, w, h),
+  save: (c, w, h) => { docBase(c, w, h); const d = dialog(c, w, h, '알림', '저장 완료', '#1f7a46'); c.strokeStyle = '#1f7a46'; c.lineWidth = 5; c.beginPath(); c.moveTo(d.x + 66, d.y + 72); c.lineTo(d.x + 78, d.y + 84); c.lineTo(d.x + 98, d.y + 60); c.stroke(); },
+  print: (c, w, h) => { docBase(c, w, h); const d = dialog(c, w, h, '인쇄', '인쇄 중… (1 / 5)', '#2f4f7f'); c.fillStyle = '#e3e6ea'; c.fillRect(d.x + 30, d.y + 92, d.dw - 60, 12); c.fillStyle = '#2f6bff'; c.fillRect(d.x + 30, d.y + 92, (d.dw - 60) * .3, 12); },
+  msg: (c, w, h, s = '') => {
+    workBase(c, w, h); const bw = 330, bh = 140, x = w - bw - 14, y = h - bh - 14;
+    c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(x + 6, y + 6, bw, bh); c.fillStyle = '#fff'; c.fillRect(x, y, bw, bh); c.fillStyle = '#3b5bdb'; c.fillRect(x, y, bw, 32);
+    c.fillStyle = '#fff'; c.font = '700 16px ' + FONT; c.textAlign = 'left'; c.fillText('메신저 · 새 메시지 1', x + 12, y + 22);
+    c.fillStyle = '#e5342b'; c.beginPath(); c.arc(x + bw - 18, y + 16, 9, 0, 7); c.fill();
+    c.fillStyle = '#222'; c.font = '700 21px ' + FONT; wrap(c, s, bw - 28).slice(0, 3).forEach((l, i) => c.fillText(l, x + 14, y + 64 + i * 30));
+  },
   chat: (c, w, h) => { c.fillStyle = '#f4f1e8'; c.fillRect(0, 0, w, h); const L = ['넵!', '확인 부탁드립니다', '@전체 필독', '주말에 잠깐 시간 되죠?', '넵넵', 'ㅇㅋ 내일 아침까지']; L.forEach((s, i) => { const me = i % 3 === 0; c.fillStyle = me ? '#ffd84d' : '#fff'; const bw = 60 + s.length * 20, x = me ? w - bw - 16 : 16, y = 16 + i * 46; c.fillRect(x, y, bw, 36); c.fillStyle = '#222'; c.font = '700 18px ' + FONT; c.textAlign = 'left'; c.fillText(s, x + 10, y + 25); }); c.fillStyle = '#e5342b'; c.beginPath(); c.arc(w - 40, h - 36, 26, 0, 7); c.fill(); c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = '700 20px ' + FONT; c.fillText('300+', w - 40, h - 29); },
   slide: (c, w, h) => { c.fillStyle = '#fff'; c.fillRect(0, 0, w, h); c.fillStyle = '#1b3a6b'; c.fillRect(0, 0, w, 70); c.fillStyle = '#fff'; c.font = '700 30px ' + FONT; c.textAlign = 'left'; c.fillText('3분기 실적 분석 및 4분기 전략 (3 / 126)', 20, 46); c.fillStyle = '#444'; c.font = '500 22px ' + FONT;['· 시너지 창출을 위한 선제적 대응', '· 패러다임 전환과 혁신 드라이브', '· 전사적 역량 결집 (상세 내용 다음 장)'].forEach((s, i) => c.fillText(s, 30, 130 + i * 44)); c.fillStyle = '#2f6bff'; for (let i = 0; i < 5; i++) c.fillRect(w * .58 + i * 34, h - 40 - i * 22, 24, i * 22 + 12); },
   blue: (c, w, h) => { c.fillStyle = '#0d3fb8'; c.fillRect(0, 0, w, h); c.fillStyle = '#fff'; c.font = '700 80px ' + FONT; c.textAlign = 'left'; c.fillText(':(', 40, h * .45); c.font = '500 20px ' + FONT; c.fillText('PC에 문제가 발생하여 다시 시작해야 합니다.', 40, h * .68); },
@@ -73,9 +111,12 @@ const SCREENS = {
   ready: (c, w, h) => { c.fillStyle = '#10151c'; c.fillRect(0, 0, w, h); c.fillStyle = '#6fe08a'; c.textAlign = 'center'; c.font = '700 40px ' + FONT; c.fillText('인쇄 대기', w / 2, h * .6); },
   toner: (c, w, h) => { c.fillStyle = '#10151c'; c.fillRect(0, 0, w, h); c.fillStyle = '#ffd84d'; c.textAlign = 'center'; c.font = '700 38px ' + FONT; c.fillText('토너 부족', w / 2, h * .46); c.font = '700 20px ' + FONT; c.fillText('(방금 갈았는데요)', w / 2, h * .8); },
   karaoke: (c, w, h) => { c.fillStyle = '#b3246b'; c.fillRect(0, 0, w, h); c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = '700 60px ' + FONT; c.fillText('♪ 98점', w / 2, h * .6); },
+  clockin: (c, w, h) => { c.fillStyle = '#0e1a14'; c.fillRect(0, 0, w, h); c.fillStyle = '#6fe08a'; c.textAlign = 'center'; c.font = '700 120px ' + FONT; c.fillText('08:59', w / 2, h * .56); c.font = '700 34px ' + FONT; c.fillStyle = '#cfe9d8'; c.fillText('사원증을 대 주세요', w / 2, h * .86); },
+  clockok: (c, w, h) => { c.fillStyle = '#1f7a46'; c.fillRect(0, 0, w, h); c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = '700 96px ' + FONT; c.fillText('정상 출근', w / 2, h * .55); c.font = '700 40px ' + FONT; c.fillText('08:59', w / 2, h * .85); },
+  clocklate: (c, w, h) => { c.fillStyle = '#b3261e'; c.fillRect(0, 0, w, h); c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = '700 120px ' + FONT; c.fillText('지각', w / 2, h * .55); c.font = '700 40px ' + FONT; c.fillText('09:01', w / 2, h * .85); },
   off: (c, w, h) => { c.fillStyle = '#07080a'; c.fillRect(0, 0, w, h); },
 };
-export function screenMat(kind) { return labelMat('S' + kind, 512, 320, SCREENS[kind] || SCREENS.off); }
+export function screenMat(kind, arg) { const fn = SCREENS[kind] || SCREENS.off; return labelMat('S' + kind + (arg || ''), 512, 320, (c, w, h) => fn(c, w, h, arg)); }
 
 export function boxGeo(w, h, d, r = 0) {
   const k = [w, h, d, r].join('|'); if (geos[k]) return geos[k];
@@ -93,25 +134,35 @@ export const sph = (g, r, mat, x = 0, y = 0, z = 0) => put(g, new THREE.Mesh(sph
 const planeG = {};
 export function pl(g, w, h, mat, x = 0, y = 0, z = 0, ry = 0, rx = 0) { const k = w + '|' + h, m = new THREE.Mesh(planeG[k] || (planeG[k] = new THREE.PlaneGeometry(w, h)), asMat(mat)); m.position.set(x, y, z); m.rotation.set(rx, ry, 0); m.receiveShadow = false; g.add(m); return m; }
 
+// ───── 하늘과 시간대
 const SKY = {};
+const SKYP = {
+  morning: ['#9cc6ee', '#f7e3cf', '#a5b4c3', 0], day: ['#8ec5f2', '#d9eefc', '#9fb4c4', 0], afternoon: ['#86b9e6', '#ece9df', '#98aabb', 0],
+  evening: ['#f08a4b', '#ffd9a0', '#5c5470', .5], night: ['#0c1330', '#27325a', '#161b30', 1],
+};
 function skyTex(t) {
   if (SKY[t]) return SKY[t];
-  const P = { day: ['#8ec5f2', '#d9eefc', '#9fb4c4', 0], evening: ['#f08a4b', '#ffd9a0', '#5c5470', .5], night: ['#0c1330', '#27325a', '#161b30', 1] }[t];
+  const P = SKYP[t] || SKYP.day;
   return SKY[t] = canvasTex(1024, 512, (c, w, h) => {
     const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, P[0]); g.addColorStop(1, P[1]); c.fillStyle = g; c.fillRect(0, 0, w, h);
+    if (t === 'morning') { c.fillStyle = 'rgba(255,236,205,.95)'; c.beginPath(); c.arc(w * .14, h * .66, 40, 0, 7); c.fill(); }
     if (t === 'evening') { c.fillStyle = '#fff1c0'; c.beginPath(); c.arc(w * .7, h * .62, 44, 0, 7); c.fill(); }
     if (t === 'night') { c.fillStyle = '#f5edc8'; c.beginPath(); c.arc(w * .2, h * .2, 26, 0, 7); c.fill(); }
     for (let i = 0; i < 26; i++) { const bw = 40 + Math.random() * 70, bh = 120 + Math.random() * 260, x = i * 40 + Math.random() * 20; c.fillStyle = P[2]; c.fillRect(x, h - bh, bw, bh); for (let y = h - bh + 10; y < h - 8; y += 16) for (let xx = x + 6; xx < x + bw - 8; xx += 12) { if (Math.random() < .25 + P[3] * .3) { c.fillStyle = P[3] > .3 ? 'rgba(255,225,140,.9)' : 'rgba(255,255,255,.35)'; c.fillRect(xx, y, 6, 8); } } }
   });
 }
 const TIMES = {
-  day: { sun: 2.3, sunCol: '#fff3df', hemi: .8, exp: .92, bg: '#cfe6f7' },
-  evening: { sun: 2.0, sunCol: '#ffc48a', hemi: .65, exp: .92, bg: '#f3b98a' },
-  night: { sun: 1.5, sunCol: '#e9eeff', hemi: .55, exp: .9, bg: '#141a33' },
+  morning: { sun: 2.1, sunCol: '#ffe4c8', hemi: .78, exp: .92, bg: '#dce8f4', env: .5, panel: 1.6, lamp: 0 },
+  day: { sun: 2.3, sunCol: '#fff3df', hemi: .8, exp: .92, bg: '#cfe6f7', env: .5, panel: 1.6, lamp: 0 },
+  afternoon: { sun: 2.45, sunCol: '#ffe8c0', hemi: .76, exp: .93, bg: '#d4e2ec', env: .5, panel: 1.6, lamp: 0 },
+  evening: { sun: 2.0, sunCol: '#ffc48a', hemi: .62, exp: .92, bg: '#f3b98a', env: .42, panel: 1.6, lamp: .25 },
+  night: { sun: .5, sunCol: '#9db0ff', hemi: .34, exp: .98, bg: '#141a33', env: .16, panel: .05, lamp: 1 },
 };
 export function setTime(t) {
   const T = TIMES[t] || TIMES.day; X.time = t;
-  X.sun.intensity = T.sun; X.sun.color.set(T.sunCol); X.hemi.intensity = T.hemi; X.renderer.toneMappingExposure = T.exp; X.scene.background = new THREE.Color(T.bg);
+  X.sun.intensity = T.sun; X.sun.color.set(T.sunCol); X.hemi.intensity = T.hemi; X.renderer.toneMappingExposure = T.exp; X.scene.background = new THREE.Color(T.bg); X.scene.environmentIntensity = T.env;
+  const lp = M('lightPanel'); lp.emissiveIntensity = T.panel; lp.color.set(T.panel < .5 ? '#77756f' : '#ffffff');
+  X.lamps.forEach(l => { l.intensity = T.lamp * l.userData.base; });
   if (X.sky) X.sky.material.map = skyTex(t);
 }
 
@@ -122,12 +173,16 @@ export function initGfx(canvas) {
   r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace;
   const s = X.scene = new THREE.Scene();
   const pm = new THREE.PMREMGenerator(r); s.environment = pm.fromScene(new RoomEnvironment(), .04).texture; s.environmentIntensity = .5;
-  X.camera = new THREE.PerspectiveCamera(58, 1, .08, 160);
+  X.camera = new THREE.PerspectiveCamera(58, 1, .05, 160);
   X.hemi = new THREE.HemisphereLight('#ffffff', '#8a8578', 1.1); s.add(X.hemi);
   const sun = X.sun = new THREE.DirectionalLight('#fff6e8', 2.4); sun.position.set(6, 16, 7); sun.castShadow = true;
   const sc = sun.shadow.camera; sc.left = -17; sc.right = 17; sc.top = 13; sc.bottom = -13; sc.near = 1; sc.far = 40;
   sun.shadow.mapSize.set(G.mobile ? 1024 : 2048, G.mobile ? 1024 : 2048); sun.shadow.bias = -.0004; sun.shadow.normalBias = .03;
   s.add(sun); s.add(sun.target);
+  // 밤에만 켜는 등 (늘 장면에 두어 셰이더를 한 번만 만든다)
+  const l1 = new THREE.PointLight('#ffd6a0', 0, 9, 1.3); l1.userData.base = 9; l1.position.set(0, 2.55, -1.9);
+  const l2 = new THREE.PointLight('#ffd6a0', 0, 7.5, 1.3); l2.userData.base = 6; l2.position.set(-11.2, 2.4, -6.3);
+  s.add(l1, l2); X.lamps = [l1, l2];
   X.sky = new THREE.Mesh(new THREE.PlaneGeometry(150, 60), new THREE.MeshBasicMaterial({ map: skyTex('day'), fog: false })); X.sky.position.set(0, 14, -46); s.add(X.sky);
   setTime('day');
 }

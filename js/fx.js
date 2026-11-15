@@ -1,32 +1,47 @@
 import { THREE, X, tex } from './gfx.js';
 import { G, rand } from './state.js';
 
-const NB = 520, NS = 280, NC = 44, NT = 18, NST = 26;
+// 종이·얼룩·잔해는 하루 동안 남는다(풀이 차면 오래된 것부터 덮어쓴다)
+const NB = 520, NS = 500, NC = 48, NT = 18, NST = 60;
+let ND = 800;
 let bits, bPos, bCol, bVel, bLife, bi = 0;
-let sheets, sd = [], si = 0; const dummy = new THREE.Object3D(), col = new THREE.Color();
+let sheets, sd = [], si = 0;
+let deb, dd = [], di = 0;
+const dummy = new THREE.Object3D(), col = new THREE.Color(), zero = new THREE.Matrix4().makeScale(0, 0, 0);
 const clouds = [], stains = []; let ci = 0, sti = 0;
 const texts = []; let ti = 0;
 const v3 = new THREE.Vector3();
 
 export function initFx() {
   const s = X.scene, g = new THREE.BufferGeometry();
+  ND = G.mobile ? 400 : 800;
   bPos = new Float32Array(NB * 3).fill(-999); bCol = new Float32Array(NB * 3); bVel = new Float32Array(NB * 3); bLife = new Float32Array(NB);
   g.setAttribute('position', new THREE.BufferAttribute(bPos, 3)); g.setAttribute('color', new THREE.BufferAttribute(bCol, 3));
   bits = new THREE.Points(g, new THREE.PointsMaterial({ size: .075, vertexColors: true, sizeAttenuation: true })); bits.frustumCulled = false; s.add(bits);
   sheets = new THREE.InstancedMesh(new THREE.PlaneGeometry(.21, .297), new THREE.MeshStandardMaterial({ color: '#ffffff', side: THREE.DoubleSide, roughness: .9 }), NS);
-  sheets.frustumCulled = false; dummy.scale.set(0, 0, 0); dummy.updateMatrix();
-  for (let i = 0; i < NS; i++) { sheets.setMatrixAt(i, dummy.matrix); sheets.setColorAt(i, col.set('#fff')); sd.push({ life: 0 }); }
+  sheets.frustumCulled = false; sheets.receiveShadow = true;
+  for (let i = 0; i < NS; i++) { sheets.setMatrixAt(i, zero); sheets.setColorAt(i, col.set('#fff')); sd.push({ life: 0 }); }
   s.add(sheets);
+  deb = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ roughness: .78 }), ND);
+  deb.frustumCulled = false; deb.receiveShadow = true;
+  for (let i = 0; i < ND; i++) { deb.setMatrixAt(i, zero); deb.setColorAt(i, col.set('#888')); dd.push(null); }
+  s.add(deb);
   for (let i = 0; i < NC; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex('soft'), transparent: true, depthWrite: false, opacity: 0 })); sp.visible = false; s.add(sp); clouds.push({ sp, life: 0 }); }
   const cg = new THREE.CircleGeometry(1, 20);
   for (let i = 0; i < NST; i++) { const m = new THREE.Mesh(cg, new THREE.MeshBasicMaterial({ transparent: true, opacity: .5, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.visible = false; s.add(m); stains.push(m); }
   const box = document.getElementById('fxt');
   for (let i = 0; i < NT; i++) { const e = document.createElement('span'); box.appendChild(e); texts.push({ e, life: 0, p: new THREE.Vector3() }); }
 }
-export function clearFx() {
+// 장면이 바뀌어도 남길 것(종이·얼룩·잔해)은 두고, 날아다니는 것만 지운다
+export function clearFxSoft() {
   bPos.fill(-999); bLife.fill(0); bits.geometry.attributes.position.needsUpdate = true;
-  dummy.scale.set(0, 0, 0); dummy.updateMatrix(); sd.forEach((d, i) => { d.life = 0; sheets.setMatrixAt(i, dummy.matrix); }); sheets.instanceMatrix.needsUpdate = true;
-  clouds.forEach(c => { c.life = 0; c.sp.visible = false; }); stains.forEach(m => m.visible = false); texts.forEach(t => { t.life = 0; t.e.style.display = 'none'; });
+  clouds.forEach(c => { c.life = 0; c.sp.visible = false; }); texts.forEach(t => { t.life = 0; t.e.style.display = 'none'; });
+}
+export function clearFx() {
+  clearFxSoft();
+  sd.forEach((d, i) => { d.life = 0; sheets.setMatrixAt(i, zero); }); sheets.instanceMatrix.needsUpdate = true;
+  dd.fill(null); for (let i = 0; i < ND; i++) deb.setMatrixAt(i, zero); deb.instanceMatrix.needsUpdate = true;
+  stains.forEach(m => m.visible = false);
 }
 
 export function bitsAt(p, n, color, speed = 3, up = 2) {
@@ -49,12 +64,31 @@ export function sheet(p, n, color = '#ffffff', power = 3) {
   if (G.mobile) n = Math.ceil(n * .6);
   for (let i = 0; i < n; i++) {
     const k = si = (si + 1) % NS, d = sd[k], a = rand(6.283), s = rand(.3, 1) * power;
-    Object.assign(d, { x: p.x + rand(-.15, .15), y: p.y + rand(-.1, .2), z: p.z + rand(-.15, .15), vx: Math.cos(a) * s, vy: rand(1.5, 4.5) * (power / 3), vz: Math.sin(a) * s, rx: rand(6.28), ry: rand(6.28), rz: rand(6.28), wx: rand(-6, 6), wy: rand(-3, 3), wz: rand(-6, 6), life: 1300, rest: false, ph: rand(6.28) });
+    Object.assign(d, { x: p.x + rand(-.15, .15), y: p.y + rand(-.1, .2), z: p.z + rand(-.15, .15), vx: Math.cos(a) * s, vy: rand(1.5, 4.5) * (power / 3), vz: Math.sin(a) * s, rx: rand(6.28), ry: rand(6.28), rz: rand(6.28), wx: rand(-6, 6), wy: rand(-3, 3), wz: rand(-6, 6), life: 1, rest: false, done: false, ph: rand(6.28) });
     sheets.setColorAt(k, col.set(color));
   }
   sheets.instanceColor.needsUpdate = true;
 }
-export function stain(x, z, r, color, a = .5) { const m = stains[sti = (sti + 1) % NST]; m.visible = true; m.position.set(x, .012 + sti * .0006, z); m.scale.set(r * rand(.8, 1.2), r * rand(.6, 1), 1); m.rotation.z = rand(6.28); m.material.color.set(color); m.material.opacity = a; }
+export function stain(x, z, r, color, a = .5) { const m = stains[sti = (sti + 1) % NST]; m.visible = true; m.position.set(x, .012 + sti * .0003, z); m.scale.set(r * rand(.8, 1.2), r * rand(.6, 1), 1); m.rotation.z = rand(6.28); m.material.color.set(color); m.material.opacity = a; }
+// 다 떨어진 조각을 물리 없는 잔해로 굳힌다
+export function debris(p, color) {
+  const k = di = (di + 1) % ND, b = p.body;
+  dummy.position.set(b.position.x, b.position.y, b.position.z); dummy.quaternion.set(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w);
+  dummy.scale.set(p.size[0], p.size[1], p.size[2]); dummy.updateMatrix();
+  deb.setMatrixAt(k, dummy.matrix); deb.setColorAt(k, color); deb.instanceMatrix.needsUpdate = true; deb.instanceColor.needsUpdate = true;
+  dd[k] = { x: b.position.x, z: b.position.z };
+}
+export function debrisCount() { let n = 0; for (const d of dd) if (d) n++; return n; }
+// 총무팀이 새 물건을 들여놓을 자리를 치운다
+export function clearArea(x, z, r) {
+  let ch = false;
+  for (let k = 0; k < ND; k++) { const d = dd[k]; if (d && Math.hypot(d.x - x, d.z - z) < r) { deb.setMatrixAt(k, zero); dd[k] = null; ch = true; } }
+  if (ch) deb.instanceMatrix.needsUpdate = true;
+  ch = false;
+  for (let k = 0; k < NS; k++) { const d = sd[k]; if (d.life > 0 && d.rest && Math.hypot(d.x - x, d.z - z) < r) { d.life = 0; sheets.setMatrixAt(k, zero); ch = true; } }
+  if (ch) sheets.instanceMatrix.needsUpdate = true;
+  for (const m of stains) if (m.visible && Math.hypot(m.position.x - x, m.position.z - z) < r) m.visible = false;
+}
 export function text(p, str, kind = 'word') {
   const t = texts[ti = (ti + 1) % NT]; t.p.set(p.x, p.y, p.z); t.life = t.max = kind === 'word' ? 52 : 60; t.e.textContent = str; t.e.className = kind; t.e.style.display = 'block'; t.rot = kind === 'word' ? rand(-10, 10) : 0;
 }
@@ -69,14 +103,15 @@ export function update(dt) {
   bits.geometry.attributes.position.needsUpdate = true; bits.geometry.attributes.color.needsUpdate = true;
   let ch = false;
   for (let k = 0; k < NS; k++) {
-    const d = sd[k]; if (d.life <= 0) continue; ch = true;
+    const d = sd[k]; if (d.life <= 0 || d.done) continue; ch = true;
     if (!d.rest) {
       d.vy = Math.max(-1.3, d.vy - 7 * dt); d.vx = d.vx * .965 + Math.sin(G.tick * .08 + d.ph) * .012; d.vz = d.vz * .965 + Math.cos(G.tick * .07 + d.ph) * .012;
       d.x += d.vx * dt; d.y += d.vy * dt; d.z += d.vz * dt; d.rx += d.wx * dt; d.ry += d.wy * dt; d.rz += d.wz * dt;
-      if (d.y <= .015) { d.rest = true; d.y = .012 + k * .0003; d.rx = -Math.PI / 2; d.ry = 0; d.life = Math.min(d.life, 900); }
+      if (d.y <= .015) { d.rest = true; d.y = .012 + k * .00002; d.rx = -Math.PI / 2; d.ry = 0; }
       if (d.y > 2.9) { d.y = 2.9; d.vy = -.2; }
     }
-    d.life--; dummy.position.set(d.x, d.y, d.z); dummy.rotation.set(d.rx, d.ry, d.rz); const s = d.life <= 0 ? 0 : Math.min(1, d.life / 30); dummy.scale.set(s, s, s); dummy.updateMatrix(); sheets.setMatrixAt(k, dummy.matrix);
+    dummy.position.set(d.x, d.y, d.z); dummy.rotation.set(d.rx, d.ry, d.rz); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); sheets.setMatrixAt(k, dummy.matrix);
+    if (d.rest) d.done = true;
   }
   if (ch) sheets.instanceMatrix.needsUpdate = true;
   for (const c of clouds) {

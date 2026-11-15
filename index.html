@@ -4,11 +4,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <title>회사 뿌시기</title>
-<meta name="description" content="상황마다 임무를 하다가 터뜨리는 3D 회사 난동 게임. 5분이면 스트레스 0%.">
+<meta name="description" content="출근부터 퇴근까지, 참다가 터뜨린다. 회의·보고서·점심·복합기·야근·사직서 — 직장인 스트레스 해소 3D 게임.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="회사 뿌시기">
+<meta property="og:title" content="회사 뿌시기">
+<meta property="og:description" content="출근부터 퇴근까지, 참다가 터뜨린다. 회의·보고서·점심·복합기·야근·사직서 — 한 판 약 9분, 직장인 스트레스 해소 게임">
+<meta property="og:url" content="https://boom-company.vercel.app/">
+<meta property="og:image" content="https://boom-company.vercel.app/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="야구방망이를 치켜든 직장인과 날아가는 서류, 회사 뿌시기 로고">
+<meta property="og:locale" content="ko_KR">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="회사 뿌시기">
+<meta name="twitter:description" content="출근부터 퇴근까지, 참다가 터뜨린다.">
+<meta name="twitter:image" content="https://boom-company.vercel.app/og.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=11">
+<link rel="stylesheet" href="css/style.css?v=21">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
@@ -22,20 +36,24 @@
   <canvas id="cv"></canvas>
   <div id="fxt"></div>
   <div id="flash"></div>
+  <div id="vig"></div>
   <div id="cross" class="off"></div>
+  <div id="band" class="off"><i>출근</i><i>오전</i><i>점심</i><i>오후</i><i>퇴근</i></div>
 
   <div id="hud" class="off">
     <div class="h-left"><b id="h-title"></b><span id="h-sub"></span></div>
     <div class="h-mid" id="h-stressbox"><i id="h-face" class="face f0"></i><div class="bar"><div id="h-stress"></div></div><span id="h-pct">100%</span></div>
-    <div class="h-right"><b id="h-money">0원</b><span><em id="h-combo"></em> <span id="h-time"></span></span></div>
+    <div class="h-right"><b id="h-money">0원</b><span><span id="h-clock"></span> <em id="h-combo"></em></span><span id="h-time"></span></div>
     <button id="b-pause" aria-label="일시정지"><span></span><span></span></button>
   </div>
   <div id="obj" class="off"></div>
   <div id="status" class="off"><span id="h-weapon"></span><div class="bar"><div id="h-rage"></div></div><span id="h-ragel">필살기</span></div>
   <div id="subt" class="off"><b></b><span></span></div>
   <div id="prompt" class="off"><span></span><div class="bar"><div></div></div></div>
+  <div id="tip" class="off"></div>
   <div id="over"></div>
   <div id="keys" class="off"></div>
+  <div id="fade" class="off"><b id="fade-time"></b><span id="fade-title"></span></div>
 
   <div id="pad" class="off">
     <div id="joy"><i></i></div>
@@ -51,13 +69,13 @@
 </div>
 
 <section id="s-title" class="scr">
-  <div class="logo"><h1><span>회</span><span>사</span> <span>뿌</span><span>시</span><span>기</span></h1><p>상황마다 참다가, 터뜨린다 · 한 판 5~8분</p></div>
+  <div class="logo"><h1><span>회</span><span>사</span> <span>뿌</span><span>시</span><span>기</span></h1><p>출근부터 퇴근까지, 참다가 터뜨린다</p></div>
   <div class="t-btns">
-    <button class="btn main" id="b-course">출근하기 <small>상황 3개 + 사직서 · 약 7분</small></button>
+    <button class="btn main" id="b-course">출근하기 <small>출근 · 오전 · 점심 · 오후 · 야근 · 약 9분</small></button>
     <div class="t-row"><button class="btn" id="b-pick">상황 골라 하기</button><button class="btn" id="b-free">자유 난동</button></div>
     <div class="t-row"><button class="btn" id="b-build">회사 설정</button><button class="btn" id="b-chars">캐릭터</button></div>
     <div class="rank"><b id="t-rank"></b><div class="bar"><div id="t-rankbar"></div></div><span id="t-total"></span></div>
-    <div class="opts"><label><input type="checkbox" id="o-snd"> 소리</label><label><input type="checkbox" id="o-voice"> 목소리</label><label><input type="checkbox" id="o-hap"> 진동</label><label><input type="checkbox" id="o-calm"> 흔들림 약하게</label></div>
+    <div class="opts"><label><input type="checkbox" id="o-snd"> 효과음</label><label><input type="checkbox" id="o-bgm"> 배경음악</label><label><input type="checkbox" id="o-hap"> 진동</label><label><input type="checkbox" id="o-calm"> 흔들림 약하게</label><label id="o-skipw" class="off"><input type="checkbox" id="o-skip"> 출근 장면 건너뛰기</label></div>
   </div>
 </section>
 
@@ -96,6 +114,6 @@
 <section id="s-fake" class="scr off"><div class="fake"><div class="fk-bar">4분기 실적 집계.xlsx — 표 계산</div><table id="fk-table"></table><p>아무 키나 누르면 돌아갑니다</p></div></section>
 <div id="toast" class="off"></div>
 <div id="boot">불러오는 중…</div>
-<script type="module" src="js/main.js?v=11"></script>
+<script type="module" src="js/main.js?v=21"></script>
 </body>
 </html>
