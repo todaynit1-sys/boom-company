@@ -56,6 +56,9 @@ const SFX = {
   spray(v, p) { noise(.14, v * .22, 'highpass', 2600 * p); noise(.1, v * .1, 'bandpass', 900, 1); },
   hum(v, p) { tone(62 * p, 66 * p, .22, v * .2, 'sawtooth'); noise(.2, v * .12, 'lowpass', 260); },
   roll(v, p) { noise(.12, v * .14, 'lowpass', 380 * p); },
+  // 확성기 외침(찌그러진 소리)과 탬버린
+  shout(v, p) { tone(240 * p, 190 * p, .42, v * .22, 'sawtooth'); tone(362 * p, 300 * p, .38, v * .14, 'square', .02); noise(.36, v * .22, 'bandpass', 1400 * p, 2.5); },
+  tamb(v) { for (let i = 0; i < 6; i++) tone(3000 + R() * 1800, 2800, .05, v * .07, 'square', i * .016); noise(.09, v * .22, 'highpass', 6000); },
 };
 export function sfx(name, vol = 1, k) {
   if (!ac || S.mute || !SFX[name]) return;

@@ -40,8 +40,10 @@ export function preview(close) {
 
 function reset() {
   clearTimers(); hush(); ui.keysHint(false); Object.assign(G, { money: 0, counts: {}, nags: 0, maxCombo: 0, combo: 0, rage: 0, stress: 30, stressMax: 30, restocked: {}, clock: 0, toys: false, emit: null, onAlarm: null });
-  R.t0 = Date.now(); R.co = copy(S.company); R.built = false; P.cheer = false; R.got = null; R.panel = false; resetToys(); ui.elev(null); ui.alarm(false);
+  R.t0 = Date.now(); R.co = copy(S.company); R.built = false; P.cheer = false; R.got = null; R.panel = false; resetToys(); ui.elev(null); ui.alarm(false); ui.over('');
   R.cfloor = 'office'; R.csnap = {}; R.cwet = {};
+  // 휴대폰을 세로로 들고 있으면 한 번만 알려 준다
+  if (G.mobile && innerHeight > innerWidth && !R.rotTold) { R.rotTold = true; after(2600, () => ui.toast('휴대폰을 가로로 돌리면 더 넓게 보여요')); }
 }
 // 지난번과 다른 것 중에서 고른다
 function pickAlt(a, key) { const others = a.filter(x => x !== S[key]), v = pick(others.length ? others : a); S[key] = v; return v; }
@@ -49,7 +51,7 @@ function pickAlt(a, key) { const others = a.filter(x => x !== S[key]), v = pick(
 export function startCourse() {
   reset(); R.mode = 'run'; R.course = true; ui.only(null);
   // 오전 = 회의·보고서·12층 임원 보고, 점심 = 탕비실·1층 카페, 오후 = 복합기·퇴근 5분 전·B2 사장님 차
-  const am = pickAlt(['meeting', 'report', 'exec'], 'lastAm'), lu = pickAlt(['lunch', 'cafe'], 'lastLunch'), pm = pickAlt(['printer', 'overtime', 'valet'], 'lastPm'); save();
+  const am = pickAlt(['meeting', 'report', 'exec', 'assembly'], 'lastAm'), lu = pickAlt(['lunch', 'cafe', 'rooftop'], 'lastLunch'), pm = pickAlt(['printer', 'overtime', 'valet', 'party'], 'lastPm'); save();
   R.list = [...(S.skipArrive ? [] : ['arrive']), am, lu, pm, 'resign']; R.i = 0; G.dayList = R.list;
   if (R.list[0] === 'arrive') prologue(); else goMission();
 }
@@ -152,7 +154,7 @@ function promptTick() {
     const t = d.use ? `E  ${d.useN}` : ride && !chair ? `E  ${d.n} 타기` : chair ? (G.mobile ? `[행동] 집기 · 꾹 = ${d.n} 타기` : `E 집기 · E 꾹 = ${d.n} 타기`) : d.weapon ? `E  ${d.n} 들기` : d.flip ? `E 꾹  ${d.n} 엎기` : `E  ${d.n} 집어 들기`;
     ui.hint(t, d.flip ? P.eHold / .45 : chair ? P.eHold / .35 : 0);
   }
-  else ui.hint(null);
+  else ui.hint(P.wdef && P.wdef.shout ? (G.mobile ? '[때리기] = 확성기로 외치기' : '좌클릭 = 확성기로 외치기') : null);
 }
 const weaponLabel = () => P.ride ? { chair: '바퀴의자', cart: '택배 카트', fork: '지게차' }[P.ride.kind] : P.wdef ? P.wdef.n + (P.wdef.spray ? ' ' + Math.max(0, Math.ceil(P.fuel)) + '%' : P.wdur ? ' ' + P.wdur : '') : '맨손';
 // ⑤ 숨 고르기 → 도장 → 다음 시각
@@ -209,7 +211,7 @@ export function startFree(floor = 'office') {
   ui.keysHint(true); after(12000, () => ui.keysHint(false)); music('rage');
   ui.tips(G.mobile
     ? ['엘리베이터 안에 들어서면 다른 층 버튼이 나와요', '의자: 행동 꾹 = 올라타기 · 카트·지게차: 행동 = 타기', '소화기를 들고 때리기 꾹 — 아래를 보고 뿜으면 날아요', '빨간 비상벨을 누르면 스프링클러가 터져요']
-    : ['엘리베이터 안에 들어서면 층 버튼이 나와요 (숫자 키 1~4)', '의자: <b>E</b> 꾹 = 올라타기 · 카트·지게차: <b>E</b> = 타기', '소화기를 들고 <b>좌클릭</b> 꾹 — 아래를 보고 뿜으면 날아요', '빨간 비상벨을 누르면 스프링클러가 터져요']);
+    : ['엘리베이터 안에 들어서면 층 버튼이 나와요 (숫자 키로도)', '의자: <b>E</b> 꾹 = 올라타기 · 카트·지게차: <b>E</b> = 타기', '소화기를 들고 <b>좌클릭</b> 꾹 — 아래를 보고 뿜으면 날아요', '빨간 비상벨을 누르면 스프링클러가 터져요']);
 }
 // 도착: 문이 열리고, 홀 쪽에서 본 카메라 앞으로 걸어 나온 뒤 등 뒤 시점으로
 function arrive() {
@@ -226,7 +228,7 @@ function enterFloor(id) {
   G.onBreak = p => { track('break:' + p.type); if (p.tag) track('tag:' + p.tag); };
   G.onOut = p => { track('out'); track('out:' + p.type); if (p.tag) track('outtag:' + p.tag); };
   G.onTick = freeTick; goalsHud();
-  const gr = FLOOR_GREET[id]; if (gr) after(2600, () => { if (R.mode === 'free' && R.floor === id) say(gr[0], gr[1]); });
+  const gr = FLOOR_GREET[id]; if (gr) after(2600, () => { if (R.mode === 'free' && R.floor === id) say(gr[0].replace('{who}', R.co.who), gr[1]); });
 }
 function freeTick(dt) {
   updatePlayer(dt); tickToys(dt);
@@ -240,7 +242,7 @@ function freeTick(dt) {
     if (show !== R.panel) { R.panel = show; ui.elev(show ? { cur: R.floor, floors: FLOOR_IDS.map(id => ({ id, lv: FLOORS[id].lv, n: FLOORS[id].n })) } : null); }
   }
   // 층마다 들리는 소리: 우리 팀은 회사 설정의 잔소리, 다른 층은 그 층 사람·방송
-  if (G.tick % 620 === 300) { const fl = FLOOR_LINES[R.floor]; if (fl) { const [w, t] = pick(fl); say(w, t); } else say(R.co.who, pick(R.lines).replace('{who}: ', '').replace('{who}', R.co.who)); }
+  if (G.tick % 620 === 300) { const fl = FLOOR_LINES[R.floor]; if (fl) { const [w, t] = pick(fl); say(w.replace('{who}', R.co.who), t); } else say(R.co.who, pick(R.lines).replace('{who}: ', '').replace('{who}', R.co.who)); }
   if (G.tick % 900 === 450) { const ph = G.props.filter(p => p.type === 'phone' && !p.dead); if (ph.length) { const p = pick(ph); sfx('ring'); p.punch = 10; fx.text({ x: p.body.position.x, y: p.body.position.y + .4, z: p.body.position.z }, '따르릉!', 'note'); } }
 }
 // 층 바꾸기: 문 닫힘 → 층 숫자 → 그 층을 다시 짓고(부순 기록을 입혀) → 문 열림. 든 무기·물건은 같이 간다

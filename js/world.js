@@ -76,9 +76,10 @@ export function applyFloor(s) {
 // ───── 모든 층에 같은 자리(남쪽 벽 x=-3.5)에 있는 엘리베이터
 export const EX = -3.5;
 export function elevatorBay(L, o = {}) {
-  const ex = EX, gw = 1.2, gh = 2.3, H = o.H || 3, wm = o.wall || 'wall';
-  solid((-14.2 + ex - gw / 2) / 2, H / 2, 9.1, ex - gw / 2 + 14.2, H, .2, wm);
-  solid((ex + gw / 2 + 14.2) / 2, H / 2, 9.1, 14.2 - (ex + gw / 2), H, .2, wm);
+  // span: 남쪽 벽을 어디부터 어디까지 세울지(옥상은 엘리베이터실 둘레만)
+  const ex = EX, gw = 1.2, gh = 2.3, H = o.H || 3, wm = o.wall || 'wall', x0 = o.span ? o.span[0] : -14.2, x1 = o.span ? o.span[1] : 14.2;
+  solid((x0 + ex - gw / 2) / 2, H / 2, 9.1, ex - gw / 2 - x0, H, .2, wm);
+  solid((ex + gw / 2 + x1) / 2, H / 2, 9.1, x1 - (ex + gw / 2), H, .2, wm);
   solid(ex, (gh + H) / 2, 9.1, gw, H - gh, .2, wm);
   solid(ex, -.25, 9.95, 1.8, .5, 1.7);
   bx(L, 1.5, .02, 1.5, 'metal', ex, .01, 9.95).castShadow = false;
@@ -234,8 +235,8 @@ export function buildOffice(co, time = 'day') {
     const ct = put('cart', 10.6, .9, { ry: PI / 2, tag: 'cart' }); on(ct, 'box', 0, .25); on(ct, 'box', 0, -.25, { ry: .2 });
     sprinklers(L, 3);
   }
-  // 밤에 켜는 등: 내 자리 위, 부장실
-  if (X.lamps[0]) { X.lamps[0].position.set(0, 2.55, -1.9); X.lamps[1].position.set(-11.2, 2.4, -6.3); }
+  // 밤에 켜는 등: 내 자리 위, 부장실(회식 층에서 바꾼 색을 되돌린다)
+  if (X.lamps[0]) { X.lamps[0].position.set(0, 2.55, -1.9); X.lamps[1].position.set(-11.2, 2.4, -6.3); X.lamps.forEach(l => l.color.set('#ffd6a0')); }
   return L;
 }
 

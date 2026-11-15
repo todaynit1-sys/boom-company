@@ -104,9 +104,9 @@ export const MISSIONS = {
       { t: '인쇄 보내기', type: 'use', at: () => my('Desk'), label: '인쇄하기', done() { setScreen(my('Monitor'), 'print'); sfx('beep'); } },
       { t: '복사실로 가기', type: 'reach', at: () => ({ x: 12.2, z: -.4 }), r: 1.4 },
       { t: '출력물 확인하기', type: 'use', at: () => find('printer'), label: '출력물 확인', done(c) { const p = find('printer'); setScreen(p, 'jam'); [0, 9, 18].forEach(d => later(d, () => sfx('beep'))); c.say('복합기', '삐빅. 용지가 걸렸습니다. 트레이 2를 확인하세요.'); } },
-      { t: '걸린 종이 뽑기', type: 'use', at: () => find('printer'), label: '걸린 종이 뽑기 (꾹 누르기)', hold: 1.4, done(c) { const p = find('printer'); fx.sheet(top(p), 7, '#ffffff', 2.5); sfx('paper'); setScreen(p, 'toner'); c.say('복합기', '토너가 부족합니다.'); later(120, () => c.say('나', '…방금 갈았는데요.')); } },
-      { t: '복합기 걷어차기', type: 'hit', at: () => find('printer'), n: 3, heavy: true, hint: '강타 3번', done() { fx.text(top(find('printer')), '덜컹!', 'word big'); sfx('metal'); G.shake = .25; } },
-      { t: '덮개 뜯어내기', type: 'use', at: () => find('printer'), label: '덮개 뜯어내기 (연타)', mash: 6, onMash() { sfx('plastic'); G.shake = .1; }, done() { const p = find('printer'), b = p.body.position; p.g.userData.lid.visible = false; const l = spawn('lid', b.x - .7, b.y + .9, b.z, { v: { x: -3, y: 6, z: rand(-1, 1) }, av: { x: 3, y: 2, z: 4 } }); l.thrownT = G.tick; fx.text(top(p), '우지끈!', 'word big'); sfx('plastic'); sfx('metal'); fx.sheet(top(p), 12); } },
+      { t: '걸린 종이 뽑기', type: 'use', at: () => find('printer'), label: '걸린 종이 뽑기 (꾹 누르기)', hold: 1.4, done(c) { const p = find('printer'); if (!p) return; fx.sheet(top(p), 7, '#ffffff', 2.5); sfx('paper'); setScreen(p, 'toner'); c.say('복합기', '토너가 부족합니다.'); later(120, () => c.say('나', '…방금 갈았는데요.')); } },
+      { t: '복합기 걷어차기', type: 'hit', at: () => find('printer'), n: 3, heavy: true, hint: '강타 3번', done() { const p = find('printer'); if (p) fx.text(top(p), '덜컹!', 'word big'); sfx('metal'); G.shake = .25; } },
+      { t: '덮개 뜯어내기', type: 'use', at: () => find('printer'), label: '덮개 뜯어내기 (연타)', mash: 6, onMash() { sfx('plastic'); G.shake = .1; }, done() { const p = find('printer'); if (!p) return; const b = p.body.position; p.g.userData.lid.visible = false; const l = spawn('lid', b.x - .7, b.y + .9, b.z, { v: { x: -3, y: 6, z: rand(-1, 1) }, av: { x: 3, y: 2, z: 4 } }); l.thrownT = G.tick; fx.text(top(p), '우지끈!', 'word big'); sfx('plastic'); sfx('metal'); fx.sheet(top(p), 12); } },
       { t: '야구방망이 집어 들기', type: 'equip', weapon: 'bat', at: () => find('bat') },
       { t: '복합기 박살 내기', type: 'break', list: () => [TAG.printer], enter() { const p = find('printer'); if (p) p.armor = 1; }, done(c) { later(45, () => c.say('나', '서비스 기사님은… 이제 안 오셔도 됩니다.')); } },
     ],
@@ -171,12 +171,59 @@ export const MISSIONS = {
       { t: '사장님 차 폐차시키기', type: 'break', list: () => [TAG.bossCar], hint: '드럼통을 던져도 터집니다' },
     ],
   },
+  // ───── 3층 대강당 · 옥상 · B1 회식
+  assembly: {
+    id: 'assembly', n: '월례 조회', sub: '「마지막으로 딱 한 말씀만…」', slot: 1, floor: 'hall', clock: [9, 10], sky: 'morning', rampage: 18, after: '…후. 다음 조회는 영상으로 보겠습니다.', needs: [],
+    steps: [
+      idle(4.4, [[.4, '나', '9시 10분. 커피부터 한 잔…'], [2.5, 'who', '{me}, 3층 대강당! 월례 조회 늦으면 인사고과야!']]),
+      { t: '엘리베이터 타고 3층으로', type: 'ride', to: 'hall' },
+      { t: '접수대에서 명찰 받기', type: 'use', at: () => find('hallDesk'), range: 2.4, label: '명찰 받기', done(c) { c.say('인사팀', '명찰 꼭 패용하세요. 출석 체크합니다.'); sfx('beep'); } },
+      { t: '내 자리에 앉기', type: 'sit', at: () => find('mySeat'), done(c) { c.say('사회자', '다음은 사장님 말씀이 있겠습니다. 박수!'); } },
+      { t: '참는다… 참는다…', type: 'wait', sec: 10, lines: [[1, '사장님', '에… 그러니까 우리 회사는 말이야…'], [3.4, '사장님', '제가 신입사원 때는 말이죠, 주말이 없었어요.'], [5.9, '사장님', '위기는 곧 기회! 다들 한 발 더 뛰어 주세요.'], [8.4, '사장님', '마지막으로 딱 한 말씀만 더…']] },
+      { t: '박수 치기', type: 'use', at: () => find('mySeat'), range: 2.4, label: '박수 치기 (연타)', mash: 10, onMash() { sfx('punch', .4); fx.text({ x: P.body.position.x, y: 2.2, z: P.body.position.z }, '짝!', 'note'); }, done(c) { c.say('사장님', '박수 소리가 작네? 다시!'); } },
+      { t: '단상 엎기', type: 'use', at: () => find('podium'), range: 2.4, label: '단상 엎기 (꾹 누르기)', hold: .7, hint: '무대 옆 계단이나 점프로 올라가세요', done() { flipProp(find('podium')); } },
+      { t: '대형 화면 부수기', type: 'break', list: () => [TAG.hallScreen], hint: '의자를 집어 던지세요' },
+      { t: '풍선 아치 터뜨리기', type: 'break', list: () => Object.keys(TAG).filter(k => /^bal\d+$/.test(k)).map(k => TAG[k]), need: 8 },
+      { t: '의자 줄 쓸어버리기', type: 'break', list: () => Object.keys(TAG).filter(k => /^fc\d+$/.test(k)).map(k => TAG[k]), need: 8 },
+    ],
+  },
+  rooftop: {
+    id: 'rooftop', n: '옥상에서 한숨', sub: '「점심시간에 어디 갔어?」', slot: 2, floor: 'roof', clock: [12, 40], sky: 'day', rampage: 18, after: '…후. 하늘은 맑다.', needs: [],
+    steps: [
+      idle(4.2, [[.4, '나', '점심시간 20분 남았다. 바람 좀 쐬자.']]),
+      { t: '엘리베이터 타고 옥상으로', type: 'ride', to: 'roof' },
+      { t: '난간에서 바람 쐬기', type: 'reach', at: () => ({ x: 0, z: -7.7 }), r: 1.4 },
+      { t: '(하늘)', type: 'cut', hide: true, sec: 3.4, face: 'relief', cam: () => { const q = P.body.position; return { pos: [q.x + .6, 2.0, q.z + 2.6], look: [q.x - 2, 3.2, -30] }; }, lines: [[.6, '나', '…좋다. 하늘 본 지 얼마 만이지.']] },
+      { t: '참는다… 참는다…', type: 'wait', sec: 8.5, lines: [[1, '단톡방', '{me}님 어디세요? 부장님이 찾으세요'], [3.3, 'who', '(전화) {me}! 점심시간에 어디 갔어? 보고서!'], [5.8, '단톡방', '@{me} 급함 급함 급함'], [7.6, 'who', '1시 정각까지 자리에 앉아 있어!']], onTick(c, t) { if (t % 50 === 25) { sfx('beep', .6); buzz(15); } } },
+      { t: '확성기 집어 들기', type: 'equip', weapon: 'megaphone', at: () => find('megaphone') },
+      { t: '확성기로 소리 지르기 3번', type: 'until', ok: () => (P.shouts || 0) - (MS.base || 0) >= 3, enter() { MS.base = P.shouts || 0; }, hint: '좌클릭(때리기 버튼) = 외치기', bot() { P.shouts = (P.shouts || 0) + 3; } },
+      { t: '부장님 상추 옥상 밖으로', type: 'out', item: () => TAG.lettuce, hint: 'E로 들고, 난간 밖을 보고 때리기 버튼' },
+      { t: '태양광 패널 3장 깨기', type: 'break', list: () => Object.keys(TAG).filter(k => /^solar\d+$/.test(k)).map(k => TAG[k]), need: 3 },
+      { t: '물탱크 터뜨리기', type: 'break', list: () => [TAG.watertank], hint: '실외기나 벤치를 던져도 됩니다' },
+    ],
+  },
+  party: {
+    id: 'party', n: '회식', sub: '「오늘은 내가 쏜다! (N빵)」', slot: 3, floor: 'party', clock: [18, 30], sky: 'evening', rampage: 18, after: '…후. 2차는 각자 집으로.', needs: [],
+    steps: [
+      idle(4.4, [[.4, '나', '6시 반. 오늘은 칼퇴…'], [2.5, 'who', '{me}, 회식 B1! 빠지면 서운해~ 막내가 고기 굽는 거 알지?']]),
+      { t: '엘리베이터 타고 B1 회식 자리로', type: 'ride', to: 'party' },
+      { t: '회식 자리에 앉기', type: 'sit', at: () => find('myStool'), done(c) { c.say('who', '자, 막내가 고기 구워야지?'); } },
+      { t: '고기 굽기', type: 'use', at: () => find('myGrill'), range: 2.2, label: '고기 굽기 (꾹 누르기)', hold: 1.4, whileHold() { const g = find('myGrill'); if (g && G.tick % 6 === 0) fx.cloud(top(g), 1, '#bbbbbb', .45, .15); if (G.tick % 20 === 0) sfx('zap', .25); }, done(c) { c.say('who', '고기 다 탔잖아! 자, 한 잔 받아. 원샷!'); } },
+      { t: '참는다… 참는다…', type: 'wait', sec: 9, lines: [[1, '과장님', '요즘 애들은 술을 못 마셔~'], [3.4, 'who', '내가 신입 때는 말이야, 회식이 새벽 3시까지…'], [6, 'who', '2차는 노래방! 빠지는 사람 없지?'], [8, '사장님', '오늘은 내가 쏜다! …N빵으로.']] },
+      { t: '노래방 1번방으로 가기', type: 'reach', at: () => ({ x: 5.0, z: -1.8 }), r: 1.3 },
+      { t: '참는다… 참는다…', type: 'wait', sec: 8, enter() { setScreen(find('ktv1'), 'karaoke2'); }, lines: [[1, '노래방 기계', '♪ 부장님 18번, 4절까지 예약되었습니다'], [3.4, 'who', '탬버린 안 치나? 분위기 좀 띄워!'], [6, 'who', '다음 곡은 {me}! 신곡으로~']] },
+      { t: '탬버린 집어 들기', type: 'equip', weapon: 'tambourine', at: () => find('tambourine') },
+      { t: '노래방 기계 부수기', type: 'break', list: () => [TAG.karaoke1] },
+      { t: '미러볼 떨어뜨리기', type: 'break', list: () => [TAG.mball1], hint: '점프해서 때리거나 물건을 던지세요' },
+      { t: '소주 냉장고 깨기', type: 'break', list: () => [TAG.sojuFridge], hint: '고깃집 서쪽 벽에 있습니다' },
+    ],
+  },
   resign: {
     id: 'resign', n: '사직서', sub: '가슴속에 품고 다니던 그것', slot: 4, clock: [23, 0], sky: 'night', rampage: 0, final: true, screen: 'sheet',
     needs: ['bossDesk', 'safe', 'portrait', 'frame_boss'],
     setup() { const s = find('safe'); if (s) s.hp = s.maxHp = 900; },
     steps: [
-      idle(4, () => [[.4, '나', (G.dayList || []).includes('overtime') ? '…칼퇴한다며. 결국 밤 11시.' : '밤 11시. 오늘도 야근.']]),
+      idle(4, () => [[.4, '나', (G.dayList || []).includes('party') ? '…회식 끝나고 다시 사무실. 밤 11시.' : (G.dayList || []).includes('overtime') ? '…칼퇴한다며. 결국 밤 11시.' : '밤 11시. 오늘도 야근.']]),
       { t: '저장하기', type: 'use', at: () => my('Desk'), label: '저장하기 (꾹 누르기)', hold: 1, done(c) { setScreen(my('Monitor'), 'blue'); sfx('zap', .5); c.say('나', '…저장 안 했는데.'); } },
       { t: '(정적)', type: 'cut', hide: true, sec: 3.2, cam: 'face', face: 'endure' },
       { t: '서랍 열기', type: 'use', at: () => my('Desk'), label: '서랍 열기', done(c) { const d = my('Desk'); if (d) on(d, 'envelope', .3, .25, { tag: 'env' }); sfx('wood', .5); setFace('normal'); c.say('나', '…오늘이다.'); } },
@@ -195,7 +242,7 @@ export const MISSIONS = {
     ],
   },
 };
-export const MISSION_IDS = ['meeting', 'exec', 'report', 'lunch', 'cafe', 'printer', 'valet', 'overtime'];
+export const MISSION_IDS = ['assembly', 'meeting', 'exec', 'report', 'lunch', 'cafe', 'rooftop', 'printer', 'valet', 'overtime', 'party'];
 
 // ───── 진행
 export const MS = { m: null, i: -1, step: null, phase: 'idle', lines: [] };
@@ -224,6 +271,13 @@ export function startMission(m, co, me, onEnd, pre = []) {
 }
 export function stopMission() { MS.phase = 'idle'; MS.step = null; MS.riding = false; G.interact = null; G.onHit = null; G.want = null; G.lookAt = null; if (marker) marker.visible = false; ui.prompt(null); }
 // 층을 다시 지으면(resetWorld) 맞은 물건 알림이 지워지므로 다시 건다. 표시(marker)도 새 장면에 다시 붙인다
+// 다 부숴서 못 하게 됐을 때(일시정지 메뉴): 지금 할 일을 넘긴다. 엘리베이터 단계는 바로 그 층으로 옮긴다
+export function skipStep() {
+  const s = MS.step; if (!s || MS.phase !== 'play' || s.type === 'cut' || s.type === 'wait') return false;
+  if (s.type === 'ride') { if (MS.riding) return false; MS.riding = true; G.rideTo(s.to, () => { MS.riding = false; s.arrive && s.arrive(ctx); if (MS.step === s) complete(); }); return true; }
+  complete(true); return true;
+}
+export function canSkip() { const s = MS.step; return !!(s && MS.phase === 'play' && s.type !== 'cut' && s.type !== 'wait' && !MS.riding); }
 export function rebind() { if (MS.phase === 'idle' || MS.phase === 'done') return; G.onHit = onHit; G.interact = interact; if (marker && !marker.parent) X.scene.add(marker); }
 function visInfo() { const st = MS.m.steps; let k = 0; for (let j = 0; j < MS.i && j < st.length; j++) if (!st[j].hide) k++; return { list: st.filter(s => !s.hide).map(s => s.t), idx: MS.i >= st.length ? 99 : k }; }
 function next() {
@@ -275,7 +329,7 @@ const reach = (a, r) => { if (!a) return false; if (!a.body) return near(a, r); 
 function interact(press, held, dt) {
   const s = MS.step; if (!s || MS.phase !== 'play') return false;
   if (s.type === 'sit') { const ch = s.at(); if (!ch || !press || !near(ch.body.position, 1.6)) return false; sit(ch); return true; }
-  if (s.type === 'carryTo') { const it = s.item(); if (!it || P.carry !== it) return false; const a = s.at(), pos = a.body ? a.body.position : a; if (!near(pos, 2.2)) return false; if (press) complete(); return press; }
+  if (s.type === 'carryTo') { const it = s.item(), a = s.at(); if (!it || !a || P.carry !== it) return false; const pos = a.body ? a.body.position : a; if (!near(pos, 2.2)) return false; if (press) complete(); return press; }
   if (s.type !== 'use') return false;
   const a = s.at(); if (!a) return false; if (!reach(a, s.range || 2.2)) return false;
   if (s.hold) { if (held) { MS.hold += dt; s.whileHold && s.whileHold(ctx); if (MS.hold >= s.hold) complete(); return true; } return false; }
@@ -318,7 +372,7 @@ export function tickMission(dt) {
   else if (s.type === 'reach') { if (near(pos, s.r || 1.5)) return complete(); }
   else if (s.type === 'pick') { const a = s.at(); if (!a) return complete(true); if (P.carry === a) return complete(); if (near(a.body.position, 2)) prompt = '집어 들기'; }
   else if (s.type === 'equip') { if (P.weapon === s.weapon) return complete(); let a = s.at(); if (!a || a.out) { const q = P.body.position; put(s.weapon, q.x + 1, q.z, { tag: s.weapon }); a = find(s.weapon); } if (near(a.body.position, 2)) prompt = '집어 들기'; }
-  else if (s.type === 'carryTo') { const it = s.item(); if (!it) return complete(true); if (P.carry === it) { const a = s.at(), ap = a.body ? a.body.position : a; if (near(ap, 2.2)) prompt = s.label; } else if (near(it.body.position, 2)) prompt = '집어 들기'; }
+  else if (s.type === 'carryTo') { const it = s.item(), a = s.at(); if (!it || !a) return complete(true); if (P.carry === it) { const ap = a.body ? a.body.position : a; if (near(ap, 2.2)) prompt = s.label; } else if (near(it.body.position, 2)) prompt = '집어 들기'; }
   else if (s.type === 'out') { const it = s.item(); if (!it || it.dead || it.out) return complete(); }
   else if (s.type === 'ride') {
     // 엘리베이터 앞에 오면 문이 열리고, 안에 들어서면 층을 옮긴다(옮기는 일은 run.js의 G.rideTo)
@@ -329,7 +383,7 @@ export function tickMission(dt) {
     if (d < 2.4) prompt = '엘리베이터 안으로 들어가기';
   }
   else if (s.type === 'until') { if (s.ok()) return complete(); if (G.auto && s.bot && MS.t > 90) s.bot(); }
-  G.want = s.type === 'pick' || s.type === 'equip' ? s.at() : s.type === 'carryTo' ? s.item() : null;
+  G.want = s.type === 'pick' || s.type === 'equip' ? s.at() : s.type === 'carryTo' || s.type === 'out' ? s.item() : null;
   ui.prompt(prompt, prog, s.type === 'wait', s.type === 'ride');
 }
 export function missionHud() { return { left: MS.phase === 'rampage' ? Math.ceil(MS.rt / 60) : null }; }

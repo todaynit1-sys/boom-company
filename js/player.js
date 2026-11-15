@@ -6,7 +6,7 @@ import { THREE, X, M, bx, colorMat, textMat, pl, canvasTex, speckle, labelMat, b
 import { CANNON, PH, GR, attack, damage, spawn, shove, explode, later, slow, addCombo, kill, distTo } from './engine.js';
 import * as fx from './fx.js';
 import { sfx, buzz } from './audio.js';
-import { mount, updateRide, sprayTick, useProp, TOY } from './toys.js';
+import { mount, updateRide, sprayTick, useProp, shout, TOY } from './toys.js';
 
 export const I ={ mx: 0, mz: 0, jump: false, a: false, b: false, c: false, e: false, lookX: 0, lookY: 0 };
 export const P = { active: false };
@@ -410,6 +410,7 @@ function doHit(a) {
   if (hits.length) {
     addCombo(hits.length); G.rage = Math.min(100, G.rage + hits.length * 1.5 + (heavy ? 2 : 0)); G.shake = Math.max(G.shake, heavy ? .16 : .05); if (heavy || W.heavy) G.hitstop = Math.max(G.hitstop, 55); buzz(8);
     sfx(W.snd, .6); if (heavy && W.word) fx.text(headPos(.2), W.word, 'note');
+    if (W.tamb) { if (G.emit) G.emit('tamb', hits.length); if (Math.random() < .35) fx.text(headPos(.2), '찰랑!', 'note'); }
     if (P.wdur > 0 && --P.wdur <= 0) { fx.text(headPos(.3), P.wdef.n + ' 사망', 'note'); fx.bitsAt(headPos(-.6), 20, '#e4e1d8', 4, 3); sfx('plastic'); dropWeapon(true); }
   } else sfx('whoosh', .6);
 }
@@ -481,12 +482,14 @@ export function updatePlayer(dt) {
     if (onG) { v.y = ch.jump; P.jumps = 1; sfx('jump'); } else if (ch.dj && P.jumps < 2) { v.y = ch.jump * .92; P.jumps = 2; sfx('jump'); fx.bitsAt({ x: pp.x, y: pp.y, z: pp.z }, 6, '#ffffff', 2, 0); }
   }
   if (P.atk) { P.atk.t += dt / P.atk.dur; if (!P.atk.hit && P.atk.t >= .45) { P.atk.hit = true; doHit(P.atk); } if (P.atk.t >= 1) P.atk = null; }
-  P.cdB--;
-  const spray = !!(P.wdef && P.wdef.spray);
+  P.cdB--; P.cdS = (P.cdS || 0) - 1;
+  const spray = !!(P.wdef && P.wdef.spray), loud = !!(P.wdef && P.wdef.shout);
   if (spray && !P.carry) sprayTick(dt, locked); else P.spraying = false;
   if (!locked && !P.atk) {
     if (P.carry) { if ((I.a && !P.pa) || (I.b && !P.pb)) throwCarry(); }
     else if (I.b && !P.pb && P.cdB <= 0) { if (!onG && P.air > 4) { P.slam = true; v.y = -17; sfx('whoosh'); } else startAtk('b'); }
+    // 확성기: 누를 때마다 외치기(꾹 누르고 있어도 잠깐씩 쉰다)
+    else if (I.a && loud) { if (P.cdS <= 0) { shout(); P.cdS = 42; } }
     else if (I.a && !spray) startAtk('a');
   }
   if (I.c && !P.pc && G.rage >= 100 && !locked) special();

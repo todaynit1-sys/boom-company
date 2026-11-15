@@ -1,7 +1,7 @@
 // 건물 층: 12층 임원층 · 7층 우리 팀(사무실) · 1층 로비·카페 · B2 지하주차장
 // 모든 층은 같은 바닥 넓이(28×18m)이고, 엘리베이터는 남쪽 벽 x=-3.5 같은 자리에 있다
 import { resetWorld, solid, GR } from './engine.js';
-import { THREE, X, M, bx, cyl, sph, pl, textMat, labelMat, speckle, tex, setTime } from './gfx.js';
+import { THREE, X, M, bx, cyl, sph, pl, textMat, labelMat, speckle, tex, setTime, canvasTex } from './gfx.js';
 import { G } from './state.js';
 import { put, on, hang, beginFloor, elevatorBay, sprinklers, buildOffice, EX } from './world.js';
 
@@ -9,6 +9,16 @@ const PI = Math.PI;
 
 // ───── 층 소개와 도전과제 (k = 세는 사건, n = 몇 번)
 export const FLOORS = {
+  roof: {
+    lv: 'R', n: '옥상', sub: '실외기 · 물탱크 · 태양광 · 흡연 부스', desc: '난간 너머로 던지고, 확성기로 소리 지르기', goals: [
+      { id: 'r1', t: '옥상에서 10개 던지기', k: 'out', n: 10 },
+      { id: 'r2', t: '물탱크 터뜨리기', k: 'tag:watertank' },
+      { id: 'r3', t: '태양광 패널 6장 깨기', k: 'break:solar', n: 6 },
+      { id: 'r4', t: '실외기 5대 부수기', k: 'break:acunit', n: 5 },
+      { id: 'r5', t: '확성기로 5번 소리 지르기', k: 'shout', n: 5 },
+      { id: 'r6', t: '부장님 상추 옥상 밖으로', k: 'outtag:lettuce' },
+    ],
+  },
   exec: {
     lv: '12', n: '임원층', sub: '사장실 · 대회의실 · 비서실', desc: '비싼 건 다 여기 있다. 수족관·도자기·금고', goals: [
       { id: 'e1', t: '사장님 수족관 깨기', k: 'tag:aquarium' },
@@ -29,6 +39,16 @@ export const FLOORS = {
       { id: 'o6', t: '바퀴의자 타고 10번 들이받기', k: 'ram:chair', n: 10 },
     ],
   },
+  hall: {
+    lv: '3', n: '대강당', sub: '무대 · 단상 · 접이식 의자 60개 · 풍선 아치', desc: '월례 조회 40분, 이제 끝낼 시간', goals: [
+      { id: 'h1', t: '단상 엎기', k: 'flip:podium' },
+      { id: 'h2', t: '풍선 10개 터뜨리기', k: 'break:balloon', n: 10 },
+      { id: 'h3', t: '대형 화면 부수기', k: 'tag:hallScreen' },
+      { id: 'h4', t: '접이식 의자 20개 부수기', k: 'break:foldchair', n: 20 },
+      { id: 'h5', t: '화환 4개 부수기', k: 'break:wreath', n: 4 },
+      { id: 'h6', t: '스피커 2대 터뜨리기', k: 'break:speaker', n: 2 },
+    ],
+  },
   lobby: {
     lv: '1', n: '로비 · 카페', sub: '보안 게이트 · 회사 카페 · 로고 조형물', desc: '천장이 높다. 소화기 뿜으며 날아 보자', goals: [
       { id: 'l1', t: '보안 게이트 5개 다 부수기', k: 'break:gate', n: 5 },
@@ -37,6 +57,16 @@ export const FLOORS = {
       { id: 'l4', t: '자판기 쓰러뜨리기', k: 'flip:vending' },
       { id: 'l5', t: '소화기 뿜으며 날기', k: 'fly' },
       { id: 'l6', t: '택배 카트로 5번 들이받기', k: 'ram:cart', n: 5 },
+    ],
+  },
+  party: {
+    lv: 'B1', n: '회식', sub: '고깃집 · 노래방 3개 방 · 소주 냉장고', desc: '「한 잔 받아!」 부장님 18번 4절째', goals: [
+      { id: 'b1', t: '회식 테이블 5번 엎기', k: 'flip:grilltable', n: 5 },
+      { id: 'b2', t: '소주 냉장고 깨기', k: 'tag:sojuFridge' },
+      { id: 'b3', t: '술병 20병 깨기', k: 'break:bottle', n: 20 },
+      { id: 'b4', t: '노래방 기계 3대 부수기', k: 'break:karaoke', n: 3 },
+      { id: 'b5', t: '미러볼 떨어뜨리기', k: 'break:mirrorball' },
+      { id: 'b6', t: '탬버린으로 20번 때리기', k: 'tamb', n: 20 },
     ],
   },
   parking: {
@@ -50,21 +80,27 @@ export const FLOORS = {
     ],
   },
 };
-export const FLOOR_IDS = ['exec', 'office', 'lobby', 'parking'];
+export const FLOOR_IDS = ['roof', 'exec', 'office', 'hall', 'lobby', 'party', 'parking'];
 // 자유 난동 중 층마다 들리는 소리(사무실은 회사 설정의 잔소리를 쓴다)와 도착 인사
 export const FLOOR_LINES = {
+  roof: [['나', '…하늘은 맑네.'], ['경비실 방송', '옥상 출입은 오후 6시까지입니다.'], ['비둘기', '구구구…'], ['흡연 중인 과장님', '여기서 부장님 얘기하면 안 돼…'], ['나', '여기서 소리 지르면 좀 낫겠지?']],
+  hall: [['사회자', '다음은 사장님 말씀이 있겠습니다. 박수!'], ['사장님', '에… 그러니까 우리 회사는 말이야… (40분째)'], ['사회자', '자리를 지켜 주시기 바랍니다.'], ['인사팀', '출석 체크합니다. 명찰 꼭 패용하세요.'], ['사장님', '마지막으로 딱 한 말씀만 더…']],
+  party: [['{who}', '자, 한 잔 받아! 원샷!'], ['과장님', '요즘 애들은 술을 못 마셔~'], ['{who}', '노래 안 하는 사람은 벌주야!'], ['노래방 기계', '♪ 98점! 축하합니다!'], ['사장님', '2차는 내가 쏜다! …N빵으로.'], ['과장님', '부장님 18번 나갑니다!']],
   exec: [['사장님', '요즘 젊은 친구들은 말이야…'], ['비서', '사장님 결재 서류 올라갑니다.'], ['전무님', '이번 분기 숫자가 왜 이래?'], ['사장님', '우리 회사는 가족 같은 회사야.'], ['비서', '사장님, 1시 골프 약속 잡혀 있습니다.'], ['전무님', '그건 사장님 생각이 아니고 내 생각이야.']],
   lobby: [['안내 방송', '오늘도 고객 감동을 실천합시다.'], ['보안 요원', '사원증 패용 부탁드립니다.'], ['카페', '주문하신 아아 12잔 나왔습니다~'], ['안내 방송', '로비에서는 정숙해 주시기 바랍니다.'], ['보안 요원', '거기 뛰지 마세요!'], ['안내 방송', '엘리베이터 정기 점검이 예정되어 있습니다.']],
   parking: [['주차 관리', '사장님 전용 구역은 주차 금지입니다.'], ['경비실 방송', '이중 주차 차량은 이동 바랍니다.'], ['주차 관리', '출구 쪽은 서행해 주십시오.'], ['경비실 방송', '차량 경보가 울리고 있습니다. 차주분은 확인 바랍니다.'], ['주차 관리', '지게차는 허가받은 분만 운전하세요.']],
 };
-export const FLOOR_GREET = { exec: ['비서', '임원층입니다. 사장님 계시니 조용히 다니세요.'], lobby: ['안내 방송', '1층 로비입니다. 오늘도 좋은 하루 되세요.'], parking: ['주차 관리', '지하 2층입니다. 사장님 차 근처는 조심하세요.'] };
-export const floorLv = id => FLOORS[id].lv === 'B2' ? 'B2' : FLOORS[id].lv + '층';
-export const floorName = id => floorLv(id) + ' ' + FLOORS[id].n;
+export const FLOOR_GREET = { roof: ['나', '옥상이다. 바람 좀 쐬자.'], hall: ['사회자', '3층 대강당입니다. 착석해 주시기 바랍니다.'], party: ['{who}', '왔어? 막내가 고기 구워야지~'], exec: ['비서', '임원층입니다. 사장님 계시니 조용히 다니세요.'], lobby: ['안내 방송', '1층 로비입니다. 오늘도 좋은 하루 되세요.'], parking: ['주차 관리', '지하 2층입니다. 사장님 차 근처는 조심하세요.'] };
+export const floorLv = id => { const lv = FLOORS[id].lv; return lv === 'R' ? '옥상' : /^B/.test(lv) ? lv : lv + '층'; };
+export const floorName = id => FLOORS[id].lv === 'R' ? FLOORS[id].n : floorLv(id) + ' ' + FLOORS[id].n;
 
 export function buildFloor(id, co, time) {
   if (id === 'exec') return buildExec(co, time);
   if (id === 'lobby') return buildLobby(co, time);
   if (id === 'parking') return buildParking(co);
+  if (id === 'roof') return buildRoof(co, time);
+  if (id === 'hall') return buildHall(co, time);
+  if (id === 'party') return buildParty(co);
   return buildOffice(co, time);
 }
 
@@ -84,7 +120,9 @@ function northWindows(H) {
 }
 const tiledM = {};
 function tiled(key, rep, rough = .18) { const k = key + rep; if (tiledM[k]) return tiledM[k]; const t = tex(key).clone(); t.repeat.set(rep[0], rep[1]); t.needsUpdate = true; return tiledM[k] = new THREE.MeshStandardMaterial({ map: t, roughness: rough, metalness: .05 }); }
-function lamps(a, b) { if (X.lamps[0]) { X.lamps[0].position.set(...a); X.lamps[1].position.set(...b); } }
+function lamps(a, b, ca = '#ffd6a0', cb = ca) { if (X.lamps[0]) { X.lamps[0].position.set(...a); X.lamps[1].position.set(...b); X.lamps[0].color.set(ca); X.lamps[1].color.set(cb); } }
+// 사람만 막는 보이지 않는 벽(물건은 넘어간다)
+const pwall = (x, z, w, d, h = 3.2) => solid(x, h / 2, z, w, h, d, null, { group: GR.PWALL, mask: GR.PLAYER });
 
 // ───── 12층 임원층: 사장실(서쪽) · 전망 복도 · 대회의실(동쪽) · 비서실과 엘리베이터 홀(남쪽)
 export function buildExec(co, time = 'day') {
@@ -247,5 +285,107 @@ export function buildParking(co) {
   put('extinguisher', -2.1, 8.75); put('extinguisher', 8.6, -3.0); put('extinguisher', -13.6, 1.8);
   hang('banner', 1.2, 2.15, 8.98, PI, { text: 'B2 주차장 · 엘리베이터', size: [2.4, .4, .03] });
   sprinklers(L, H - .05); lamps([-5, 2.35, -6.2], [-10, 2.35, 6.2]);
+  return L;
+}
+
+// ───── 옥상: 낮은 난간(1.1m) 너머로 던질 수 있고 사람은 못 넘어간다. 남쪽엔 엘리베이터실만 서 있다
+let heliM;
+const helipadMat = () => heliM || (heliM = new THREE.MeshStandardMaterial({ map: canvasTex(256, 256, (c, w, h) => { c.clearRect(0, 0, w, h); c.strokeStyle = 'rgba(242,194,26,.9)'; c.lineWidth = 14; c.beginPath(); c.arc(128, 128, 110, 0, 7); c.stroke(); c.fillStyle = 'rgba(255,255,255,.9)'; c.font = '700 150px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('H', 128, 136); }), transparent: true, depthWrite: false, roughness: .8 }));
+export function buildRoof(co, time = 'day') {
+  const L = resetWorld(); G.scene = 'roof'; beginFloor(); setTime(time);
+  G.outZone = { x: 14.4, z0: -9.5, z1: 9.4, label: '옥상에서 투척!', k: 4 }; G.ceil = 12; G.heads = null; G.ceilH = 3;
+  solid(0, -.5, 0, 28.4, 1, 18.4); plane(L, 'roofGreen', 28, 18);
+  const ph = 1.1, edges = [[0, -9.1, 28.4, .25], [-14.1, 0, .25, 18.4], [14.1, 0, .25, 18.4], [-10.1, 9.1, 8.2, .25], [6.6, 9.1, 15.2, .25]];
+  for (const [x, z, w, d] of edges) { solid(x, ph / 2, z, w, ph, d, 'concreteWall'); bx(L, w + .04, .05, d + .06, 'metal', x, ph + .025, z).castShadow = false; pwall(x, z, w, d); }
+  // 엘리베이터실: 앞벽은 엘리베이터 둘레만, 옆·뒤·지붕은 보이기만
+  elevatorBay(L, { H: 3.2, wall: 'concreteWall', label: 'R ▼', span: [-6, -1] });
+  bx(L, 5.2, .2, 2.3, 'concreteWall', -3.5, 3.3, 10.25); bx(L, .2, 3.2, 2.3, 'concreteWall', -6, 1.6, 10.25); bx(L, .2, 3.2, 2.3, 'concreteWall', -1, 1.6, 10.25); bx(L, 5.2, 3.2, .2, 'concreteWall', -3.5, 1.6, 11.35);
+  // 아래 땅과 둘레 건물(옥상보다 낮은 것도, 높은 것도)
+  plane(L, 'asphalt', 300, 300, 0, -40, 0);
+  for (const [x, z, w, d, top, m] of [[-22, -30, 12, 10, -6, 'bglass'], [4, -34, 14, 12, 8, 'concrete'], [27, -28, 10, 10, -2, 'brick'], [34, 0, 12, 14, 4, 'bglass'], [30, 22, 10, 10, -10, 'concrete'], [6, 32, 14, 10, -4, 'brick'], [-18, 30, 12, 12, 12, 'bglass'], [-34, -6, 12, 12, -8, 'concrete'], [-30, 18, 10, 10, 2, 'brick']]) { const b = bx(L, w, top + 40, d, m, x, (top - 40) / 2, z); b.castShadow = false; }
+  // 실외기 줄 · 물탱크 · 태양광
+  for (let i = 0; i < 8; i++) put('acunit', 13.45, -7.6 + i * 1.1, { ry: -PI / 2, tag: 'ac' + i });
+  put('watertank', 9.6, 5.8, { tag: 'watertank' });
+  let sn = 0; for (const z of [-7.4, -5.6]) for (const x of [1.8, 3.7, 5.6, 7.5]) put('solar', x, z, { tag: 'solar' + sn++ });
+  // 흡연 부스(서북쪽 모서리)
+  hang('glasspane', -11.5, 1.2, -6.6, 0, { size: [3, 2.4, .05], tag: 'booth0' }); hang('glasspane', -10, 1.2, -8.3, PI / 2, { size: [1.2, 2.4, .05], tag: 'booth1' });
+  bx(L, 4, .08, 2.5, 'metalDark', -12, 2.44, -7.85).castShadow = false;
+  pl(L, 1.4, .3, textMat('흡연 부스', { w: 320, h: 72, size: 46, bg: '#1b1b1b', fg: '#ffd84d' }), -11.5, 2.2, -6.55);
+  put('ashtray', -12.6, -7.8); put('ashtray', -11, -8.4);
+  // 쉼터: 파라솔·의자·벤치, 확성기
+  for (const [x, z, c] of [[-6, -3.5, '#d6338a'], [-2.4, -3.5, '#2f6bff'], [-6, .4, '#2a8a45']]) { put('parasol', x, z, { col: c }); put('cafechair', x - .7, z, { ry: PI / 2 }); put('cafechair', x + .7, z, { ry: -PI / 2 }); }
+  put('bench', 2, 8.5, { ry: PI }); const bn = put('bench', 6, 8.5, { ry: PI }); on(bn, 'megaphone', .3, 0, { ry: .4, tag: 'megaphone' });
+  // 텃밭과 부장님 상추
+  put('planter', -11.6, 3.8); put('planter', -11.6, 5.4); put('planter', -8.6, 3.8); put('lettuce', -8.4, 5.6, { tag: 'lettuce' });
+  // 안테나 · 헬기장 표시 · 현수막
+  cyl(L, .06, .08, 7, 'metal', 12.2, 3.5, 7.7, 8); sph(L, .15, 'alarmLamp', 12.2, 7.05, 7.7);
+  plane(L, helipadMat(), 6, 6, 2.6, .006, 2.4);
+  hang('banner', 0, .6, -8.95, 0, { text: '직원 여러분 사랑합니다 — 대표이사', size: [5, .5, .03] });
+  put('extinguisher', -1.3, 8.75); put('extinguisher', 12.9, -8.6); put('bigplant', -13.3, 8.3);
+  lamps([0, 3, 0], [8, 3, 4]);
+  return L;
+}
+
+// ───── 3층 대강당: 무대(높이 .8m)·대형 화면·단상, 접이식 의자 60개, 풍선 아치
+export function buildHall(co, time = 'day') {
+  const L = resetWorld(); G.scene = 'hall'; beginFloor(); setTime(time);
+  const H = 6; G.outZone = null; G.ceil = H - .15;
+  shell(L, H, 'parquet', 'wallHall'); panels(L, H); elevatorBay(L, { H, wall: 'wallHall', label: '3F ▲▼' });
+  solid(0, H / 2, -9.1, 28.4, H, .2, 'wallHall');
+  solid(0, .4, -7.3, 20, .8, 3.6, 'stage'); bx(L, 20, .05, .06, 'gold', 0, .8, -5.48).castShadow = false;
+  solid(-10.6, .2, -6.4, 1.2, .4, 1.4, 'stage'); solid(10.6, .2, -6.4, 1.2, .4, 1.4, 'stage');
+  for (const s of [-1, 1]) bx(L, 3.4, H - .2, .12, 'curtain', s * 12.2, (H - .2) / 2, -8.9).castShadow = false;
+  bx(L, 28, .7, .12, 'curtain', 0, H - .35, -8.85).castShadow = false;
+  hang('tv', 0, 3.4, -8.95, 0, { size: [9, 3.6, .12], screen: 'hall', sarg: co.name, price: 30000000, tag: 'hallScreen' });
+  put('podium', -3.8, -6.6, { base: .8, text: co.name, tag: 'podium' });
+  ['축 발전', '축 시무식', '축 30주년', '축 대박'].forEach((t, i) => put('wreath', [-8.6, -7.3, 7.3, 8.6][i], -7.7, { base: .8, text: t, tag: 'wr' + i }));
+  put('speaker', -9.4, -5.95, { base: .8, tag: 'spk0' }); put('speaker', 9.4, -5.95, { base: .8, tag: 'spk1' });
+  for (let i = 0; i < 14; i++) { const t = i / 13; hang('balloon', -5 + t * 10, .95 + Math.sin(t * PI) * 2.6, -5.25, 0, { col: ['#ff5c8a', '#ffd84d', '#2f6bff', '#2a8a45'][i % 4], tag: 'bal' + i }); }
+  // 좌석 6줄 × 10 (가운데 줄 다섯째가 내 자리)
+  let fc = 0; for (let r = 0; r < 6; r++) for (let c = 0; c < 10; c++) put('foldchair', -5.4 + c * 1.2, -3.4 + r * 1.15, { ry: PI, tag: r === 2 && c === 4 ? 'mySeat' : 'fc' + fc++ });
+  // 접수대 · 기념품 · 촬영 카메라 · 현수막
+  const dk = put('table', 4.2, 6.6, { size: [3, .74, .7], tag: 'hallDesk' }); on(dk, 'papers', -1, 0, { size: [.3, .08, .22] }); [-.4, .1, .6, 1.1].forEach((dx, i) => on(dk, 'giftbox', dx, 0, { col: ['#2f6bff', '#c9281f', '#2a8a45', '#7a2030'][i] })); on(dk, 'bottle', -1.3, .2, { col: '#9fd8ff' });
+  for (let i = 0; i < 6; i++) put('giftbox', 7 + (i % 3) * .36, 8.4, { base: (i / 3 | 0) * .224, col: '#2f6bff' });
+  put('camera', 0, 5, { ry: PI, tag: 'hallCam' });
+  hang('banner', -14, 3.6, -2.5, PI / 2, { text: '열정! 도전! 혁신!', size: [5, .6, .03] }); hang('banner', 14, 3.6, -2.5, -PI / 2, { text: '하면 된다! 안 되면 될 때까지!', size: [5, .6, .03] });
+  put('bigplant', -13.3, 8.3); put('bigplant', 13.3, 8.3); put('bigplant', -13.3, -4.6); put('bigplant', 13.3, -4.6);
+  hang('alarm', EX - 1.7, 1.4, 8.97, PI, { tag: 'alarm' }); put('extinguisher', -1, 8.75); put('extinguisher', 12.9, -4);
+  sprinklers(L, H); lamps([-3.6, 4.2, -6.2], [3.6, 4.2, -6.2]);
+  return L;
+}
+
+// ───── B1 회식: 서쪽은 고깃집(불판 테이블 6개), 동쪽은 노래방 방 3개와 2차 카운터
+export function buildParty(co) {
+  const L = resetWorld(); G.scene = 'party'; beginFloor(); setTime('party');
+  const H = 2.8; G.outZone = null; G.ceil = H - .15;
+  shell(L, H, 'tileDark', 'wallWarm'); panels(L, H); elevatorBay(L, { H, wall: 'wallWarm', label: 'B1 ▲▼' });
+  solid(0, H / 2, -9.1, 28.4, H, .2, 'wallWarm');
+  [[-11, -6], [-7, -6], [-3, -6], [-11, -1.8], [-7, -1.8], [-3, -1.8]].forEach(([x, z], i) => {
+    const t = put('grilltable', x, z, { tag: i === 4 ? 'myGrill' : 'gt' + i });
+    on(t, 'bottle', -.5, -.28); on(t, 'bottle', -.38, -.32); on(t, 'bottle', .52, .28, { col: '#8a5a14' }); on(t, 'mug', -.5, .3); on(t, 'mug', .45, -.3);
+    [[-.35, -.8, 0], [.35, -.8, 0], [-.35, .8, PI], [.35, .8, PI]].forEach(([dx, dz, ry], k) => put('stool', x + dx, z + dz, { ry, tag: i === 4 && k === 2 ? 'myStool' : undefined }));
+    cyl(L, .07, .07, H - 1.8, 'chrome', x, (H + 1.8) / 2, z, 10).castShadow = false; cyl(L, .34, .1, .26, 'chrome', x, 1.8, z, 16).castShadow = false;
+  });
+  put('sojufridge', -13.62, 3.4, { ry: PI / 2, tag: 'sojuFridge' }); put('sojufridge', -13.62, 4.7, { ry: PI / 2 });
+  const ct = put('counter', -13.65, -5.6); on(ct, 'monitor', 0, .6, { ry: PI / 2, screen: 'pos' }); on(ct, 'mug', 0, -.4); on(ct, 'mug', 0, -.2);
+  hang('menuboard', -13.97, 1.9, -1.4, PI / 2, { menu: 'meat' });
+  hang('banner', -6.5, 2.4, -8.98, 0, { text: '영업팀 회식 — 오늘은 부장님이 쏜다! (N빵)', size: [6.4, .45, .03] });
+  // 노래방: 방 3개(북쪽), 문은 방마다 오른쪽 끝
+  for (const x of [1.9, 6, 10]) solid(x, H / 2, -5.05, .2, H, 8.1, 'wallParty');
+  [[1.9, 6, '#5a1f6b'], [6, 10, '#1f3f6b'], [10, 14.2, '#6b1f2b']].forEach(([x0, x1, col], k) => {
+    const n = k + 1, cx = (x0 + x1) / 2, d0 = x1 - 1.6, d1 = x1 - .4;
+    solid((x0 + d0) / 2, H / 2, -1, d0 - x0, H, .2, 'wallParty'); solid((d1 + x1) / 2, H / 2, -1, x1 - d1, H, .2, 'wallParty'); solid((d0 + d1) / 2, (2.2 + H) / 2, -1, d1 - d0, H - 2.2, .2, 'wallParty');
+    pl(L, 1.0, .26, textMat(n + '번방', { w: 256, h: 64, size: 44, bg: '#2c2240', fg: '#ff7ab0', lit: false }), (d0 + d1) / 2, 2.48, -.885);
+    hang('tv', cx, 1.55, -8.95, 0, { size: [2.4, 1.35, .08], screen: 'karaoke2', price: 3000000, tag: 'ktv' + n });
+    put('karaoke', cx + 1.05, -8.55, { tag: 'karaoke' + n });
+    put('sofa', cx, -2.3, { ry: PI, col }); put('sofa', x0 + .55, -5, { ry: PI / 2, col }); put('sofa', x1 - .55, -5, { ry: -PI / 2, col });
+    const t = put('table', cx, -4.8, { size: [1.6, .45, .8] }); on(t, 'tambourine', -.45, 0, { tag: n === 1 ? 'tambourine' : 'tb' + n }); on(t, 'mic', .25, .15); on(t, 'mic', .45, -.1); on(t, 'bottle', .6, .25, { col: '#8a5a14' }); on(t, 'bottle', -.1, .25);
+    hang('mirrorball', cx, H - .55, -5.2, 0, { tag: 'mball' + n });
+  });
+  put('reception', 8.2, 1.6, { text: '2차 노래방', tag: 'kRecep' }); put('vending', 13.58, 2.4, { ry: -PI / 2, col: '#2f6bff' }); put('sofa', 12.2, 8.3, { ry: PI, col: '#5a1f6b' });
+  hang('logo', 8, 2.35, 8.96, PI, { text: '노래방 2차', size: [3.2, .6, .08] });
+  hang('alarm', EX - 1.7, 1.4, 8.97, PI, { tag: 'alarm' }); put('extinguisher', -1, 8.75); put('extinguisher', 13.6, -.2);
+  put('bigplant', -13.3, 8.3); put('bigplant', 1.2, 8.3);
+  sprinklers(L, H); lamps([3.95, 2.3, -5], [8, 2.3, -5], '#ff4fa3', '#4f8bff');
   return L;
 }

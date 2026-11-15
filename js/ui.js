@@ -222,7 +222,7 @@ export function bill(d) {
   if (d.promo) setTimeout(() => sfx('up'), 2000);
 }
 
-export function pause(on) { show('s-pause', on); }
+export function pause(on) { show('s-pause', on); if (on) show('p-skip', !!(act.canSkip && act.canSkip())); }
 export function fake(on) {
   show('s-fake', on); if (!on) return;
   const t = $('fk-table'); if (t.rows.length) return;
@@ -245,4 +245,5 @@ export function init(missions, ids) {
   $('ch-name').oninput = e => { const v = e.target.value.trim(); if (v) S.charName[S.char] = v; else delete S.charName[S.char]; save(); };
   $('ch-ok').onclick = () => { act.preview(); showTitle(); };
   $('b-pause').onclick = () => act.pause(); $('p-resume').onclick = () => act.pause(); $('p-quit').onclick = () => act.quit(); $('p-title').onclick = () => act.home();
+  $('p-skip').onclick = () => { act.pause(); if (act.skip && act.skip()) toast('할 일을 하나 넘겼어요'); };
 }

@@ -4,7 +4,7 @@ import { X, initGfx, resizeGfx } from './gfx.js';
 import { tick } from './engine.js';
 import * as fx from './fx.js';
 import { I, P, CAM, renderPlayer } from './player.js';
-import { MISSIONS, MISSION_IDS, MS } from './missions.js';
+import { MISSIONS, MISSION_IDS, MS, skipStep, canSkip } from './missions.js';
 import { R, title, preview, startCourse, startSingle, startFree, goFloor, bill, again, fmtClock } from './run.js';
 import { tickWorld } from './world.js';
 import { FLOOR_IDS } from './floors.js';
@@ -16,7 +16,13 @@ import { stageOg } from './og.js';
 
 const cv = document.getElementById('cv'), flashEl = document.getElementById('flash');
 let W = 1, H = 1;
-function resize() { W = innerWidth; H = innerHeight; resizeGfx(W, H); }
+// 휴대폰이면 카메라를 캐릭터 가까이, 화면 배치는 세로(phone-p)·가로(phone-l)에 맞춘다
+function resize() {
+  W = innerWidth; H = innerHeight; resizeGfx(W, H);
+  const phone = G.mobile || Math.min(W, H) < 520, portrait = H > W;
+  CAM.dist = phone ? (portrait ? 3.4 : 3.5) : 4.3;
+  document.body.classList.toggle('phone-p', phone && portrait); document.body.classList.toggle('phone-l', phone && !portrait);
+}
 addEventListener('resize', resize);
 const playing = () => R.mode === 'run' || R.mode === 'free' || R.mode === 'finale';
 
@@ -107,13 +113,17 @@ function step() { pollKeys(); if (G.auto) bot(); tick(); tickWorld(); }
 function draw(dt) { renderPlayer(dt); X.renderer.render(X.scene, X.camera); fx.drawTexts(W, H); flashEl.style.opacity = G.flash > 0 && !G.calm ? Math.min(.7, G.flash / 8) : 0; }
 function frame(t) {
   const dt = Math.min(100, t - lastT); lastT = t;
-  if (!G.paused && !G.userPause && !document.hidden) { acc += dt; let n = 0; while (acc >= 16.667 && n < 3) { step(); acc -= 16.667; n++; } if (n === 3) acc = 0; }
-  draw(dt / 1000); requestAnimationFrame(frame);
+  // 한 번 틀려도 게임이 멈추지 않게: 오류는 기록만 하고 다음 틱으로 넘어간다
+  try { if (!G.paused && !G.userPause && !document.hidden) { acc += dt; let n = 0; while (acc >= 16.667 && n < 3) { step(); acc -= 16.667; n++; } if (n === 3) acc = 0; } }
+  catch (e) { acc = 0; if (!frame.errs || frame.errs++ < 5) { frame.errs = frame.errs || 1; console.error(e); } }
+  try { draw(dt / 1000); } catch (e) { console.error(e); }
+  requestAnimationFrame(frame);
 }
 
 Object.assign(ui.act, {
   course: startCourse, single: startSingle, free: startFree, goFloor, preview, title, again, clock: fmtClock,
   pause: () => setPause(!paused),
+  canSkip: () => R.mode === 'run' && canSkip(), skip: () => R.mode === 'run' && skipStep(),
   quit: () => { paused = false; G.userPause = false; ui.pause(false); duckMusic(1); bill(); },
   home: () => { paused = false; G.userPause = false; ui.pause(false); duckMusic(1); title(); },
 });

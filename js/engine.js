@@ -186,6 +186,13 @@ function spill(p) {
     else if (k === 'cans') { for (const cc of ['#c9281f', '#2f6bff', '#ffd84d', '#2a8a45']) fx.bitsAt(pos, n >> 2, cc, 4, 4); }
     else if (k === 'coins') fx.bitsAt(pos, n, '#e3b23c', 3.5, 4);
     else if (k === 'cups') { fx.bitsAt(pos, n, '#ffffff', 4, 4); fx.bitsAt(pos, n, '#cfe9ff', 3, 3); }
+    // 새 배경: 물탱크 홍수, 재, 숯불, 소주, 꽃잎, 풍선 색종이
+    else if (k === 'flood') { explode(pos, 6.5, 0, 9); fx.bitsAt(pos, 140, '#8fd0ff', 6, 5); for (let i = 0; i < 10; i++) fx.stain(b.x + rand(-4.5, 4.5), b.z + rand(-4.5, 4.5), rand(1.2, 2.4), '#6fb6e8', .3); fx.text({ x: pos.x, y: pos.y + 1, z: pos.z }, '콸콸콸!', 'word big'); sfx('water'); later(8, () => sfx('water', .8)); later(16, () => sfx('water', .6)); }
+    else if (k === 'ash') { fx.cloud(pos, 4, '#8a8a8a', .6, .3); fx.bitsAt(pos, n, '#6b6b6b', 2.5, 2); fx.stain(b.x, b.z, .4, '#555555', .5); }
+    else if (k === 'coals') { fx.bitsAt(pos, n, '#ff7a1a', 3.5, 3); fx.bitsAt(pos, n >> 1, '#2a2522', 3, 3); fx.cloud(pos, 3, '#555555', .6, .3); fx.stain(b.x, b.z, .5, '#2a2522', .5); }
+    else if (k === 'soju') { fx.bitsAt(pos, n, '#3fae5a', 4.5, 4); fx.bitsAt(pos, n >> 1, '#cfeaf5', 4, 3); fx.stain(b.x, b.z, 1.1, '#bfe6d0', .3); sfx('water', .7); }
+    else if (k === 'petals') { fx.bitsAt(pos, n, '#ff8fb1', 3, 3); fx.bitsAt(pos, n >> 1, '#ffd84d', 3, 3); }
+    else if (k === 'confetti') { for (const cc of ['#ff5c8a', '#ffd84d', '#2f6bff', '#2a8a45']) fx.bitsAt(pos, n >> 2, cc, 3, 2.5); sfx('pop', .9); }
   }
 }
 export function explode(c, r, dmg, push) {

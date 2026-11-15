@@ -2,7 +2,7 @@
 // 자유 난동(G.toys)에서만 탈 수 있다. 소화기 뿜기는 어디서나 된다
 import { G, rand, clamp, lerp, angLerp, pick } from './state.js';
 import { THREE, M } from './gfx.js';
-import { CANNON, PH, GR, damage, shove, spawn, addCombo, comboMult, distTo, setScreen } from './engine.js';
+import { CANNON, PH, GR, damage, shove, spawn, addCombo, comboMult, distTo, setScreen, later } from './engine.js';
 import { DEFS } from './data/props.js';
 import { P, I, CAM, dropWeapon } from './player.js';
 import * as fx from './fx.js';
@@ -230,13 +230,34 @@ function carTick(p) {
   if (p.smoke && G.tick % 12 === 0) { const b = p.body.position, yaw = yawOf(p.body.quaternion), f = p.size[2] * .36; fx.cloud({ x: b.x + Math.sin(yaw) * f, y: b.y + .4, z: b.z + Math.cos(yaw) * f }, 1, '#5a5a5a', .7, .15); }
 }
 
-// 매 틱(물리 계산 전): 비상벨·포크·자동차
+// ───── 확성기: 누를 때마다 직장인 한 맺힌 외침. 앞쪽 물건이 밀려나고 유리·종이는 깨진다
+const SHOUTS = ['부장님 미워!!', '월요일 싫어!!', '퇴근하고 싶다!!', '연봉 올려 줘!!', '주말 출근 안 해!!', '회식 싫어!!', '내 휴가 돌려줘!!', '보고서 그만!!', '칼퇴 만세!!', '단톡방 나갈래!!'];
+export function shout() {
+  const pp = P.body.position, f = { x: Math.sin(P.yaw), z: Math.cos(P.yaw) }, head = { x: pp.x + f.x * .5, y: pp.y + 1.6, z: pp.z + f.z * .5 };
+  fx.text({ x: head.x + f.x * 1.3, y: head.y + .35, z: head.z + f.z * 1.3 }, pick(SHOUTS), 'word big');
+  sfx('shout'); later(14, () => sfx('shout', .45)); later(28, () => sfx('shout', .2));
+  G.shake = Math.max(G.shake, .25); buzz(40); P.shouts = (P.shouts || 0) + 1; emit('shout');
+  P.atk = { type: 'swing', t: .3, dur: .35, hit: true };
+  for (let i = 1; i <= 3; i++) fx.cloud({ x: head.x + f.x * i * 1.3, y: head.y, z: head.z + f.z * i * 1.3 }, 1, '#fff6c0', .5 + i * .25, .05);
+  let n = 0;
+  for (const q of G.props) {
+    if (q.dead || q.held || q.kind !== 'obj') continue;
+    const qp = q.body.position, dx = qp.x - pp.x, dz = qp.z - pp.z, d = Math.hypot(dx, dz);
+    if (d > 6 || d < .2 || (dx * f.x + dz * f.z) / d < .7) continue;
+    const k = 1 - d / 6; if (!q.fixed) shove(q, f.x * 7 * k, 3 * k, f.z * 7 * k);
+    if (q.hp != null && (q.mat === 'glass' || q.mat === 'paper' || q.type === 'balloon')) { damage(q, 45 * k, qp, true, true); n++; }
+  }
+  if (n) addCombo(n);
+}
+
+// 매 틱(물리 계산 전): 비상벨·포크·자동차·미러볼
 export function tickToys(dt) {
   alarmTick();
   for (const p of G.props) {
     if (p.dead) continue;
     if (p.type === 'forklift') forkTick(p, dt);
     else if (p.type === 'car') carTick(p);
+    else if (p.type === 'mirrorball' && p.fixed && p.g.userData.spin) p.g.userData.spin.rotation.y += .025;
   }
 }
 // 층을 바꾸거나 판이 끝날 때
