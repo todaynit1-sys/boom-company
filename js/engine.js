@@ -1,186 +1,212 @@
+import * as CANNON from 'cannon-es';
+import { THREE, X, bx, newLevel, screenMat } from './gfx.js';
 import { G, rand, pick, clamp, won } from './state.js';
-import { DEFS, MATS } from './data/objects.js';
+import { DEFS, MATS } from './data/props.js';
 import * as fx from './fx.js';
 import { sfx, buzz } from './audio.js';
-import { bake, stain } from './draw.js';
-const M = Matter;
-const CATOF = { obj: 2, frag: 4, paper: 8, bubble: 16, popup: 16, proj: 2 };
-const MASK = { obj: 1 | 2 | 4 | 16, frag: 1 | 2, paper: 1, bubble: 1 | 2 | 16, popup: 1 | 2 | 16, proj: 1 | 2 };
+export { CANNON };
 
-export function initWorld(W, scene) {
-  G.W = W; G.cx = W / 2; G.scene = scene;
-  G.engine = M.Engine.create(); G.world = G.engine.world;
-  const st = { isStatic: true, friction: .8, collisionFilter: { category: 1, mask: 0xFFFF } };
-  const top = scene === 'room' ? -100 : -900;
-  M.World.add(G.world, [M.Bodies.rectangle(W / 2, 620, W + 800, 200, st), M.Bodies.rectangle(W / 2, top, W + 800, 200, st), M.Bodies.rectangle(-100, 0, 200, 3000, st), M.Bodies.rectangle(W + 100, 0, 200, 3000, st)]);
-  M.Events.on(G.engine, 'collisionStart', e => { for (const p of e.pairs) G.hits.push(p.bodyA, p.bodyB); });
-  Object.assign(G, { objs: [], removeQ: [], hits: [], timers: [], parts: [], texts: [], bursts: [], bombs: [], hitstop: 0, timeScale: 1, slowAcc: 0, slowUntil: 0, shake: 0, flashW: 0, dark: 0, mult: 1, onTick: null, onBreak: null, onStage: null });
-  G.settle = G.tick + 50;
+export const PH = { world: null };
+export const GR = { STATIC: 1, PROP: 2, FRAG: 4, PLAYER: 8, PWALL: 16 };
+const DT = 1 / 60;
+let impacts = [], fragN = 0;
+
+export function resetWorld() {
+  const w = PH.world = new CANNON.World({ gravity: new CANNON.Vec3(0, -18, 0) });
+  w.broadphase = new CANNON.SAPBroadphase(w); w.allowSleep = true; w.solver.iterations = 8;
+  PH.matD = new CANNON.Material('d'); PH.matP = new CANNON.Material('p');
+  w.addContactMaterial(new CANNON.ContactMaterial(PH.matD, PH.matD, { friction: .5, restitution: .12 }));
+  w.addContactMaterial(new CANNON.ContactMaterial(PH.matP, PH.matD, { friction: 0, restitution: 0 }));
+  Object.assign(G, { props: [], removeQ: [], timers: [], camBlock: [], hitstop: 0, timeScale: 1, slowUntil: 0, shake: 0, mult: 1, onTick: null, onBreak: null, onHit: null, onOut: null });
+  impacts = []; fragN = 0; G.settle = G.tick + 80;
+  fx.clearFx();
+  return newLevel();
 }
-
+// 부서지지 않는 고정 상자(벽·바닥). mat을 주면 그림도 만든다.
+export function solid(x, y, z, w, h, d, mat, o = {}) {
+  const b = new CANNON.Body({ mass: 0, material: PH.matD, collisionFilterGroup: o.group || GR.STATIC, collisionFilterMask: o.mask ?? (GR.PROP | GR.FRAG | GR.PLAYER) });
+  b.addShape(new CANNON.Box(new CANNON.Vec3(w / 2, h / 2, d / 2))); b.position.set(x, y, z); PH.world.addBody(b);
+  if (mat) { const m = bx(X.level, w, h, d, mat, x, y, z); if (o.noShadow) m.castShadow = false; if (o.block !== false) G.camBlock.push(m); return m; }
+  return b;
+}
 export function later(ticks, fn) { G.timers.push({ t: G.tick + ticks, fn }); }
 export function slow(scale, realTicks) { G.timeScale = scale; G.slowUntil = G.real + realTicks; }
 
-export function spawn(type, x, y, o = {}) {
-  const def = DEFS[type], w = o.w || def.w, h = o.h || def.h, kind = o.kind || def.kind || 'obj';
-  const opt = { density: def.d || .001, friction: def.fr ?? .6, frictionAir: def.air ?? .01, restitution: def.re ?? .12, collisionFilter: { category: CATOF[kind], mask: MASK[kind] } };
-  if (o.sensor) opt.isSensor = true;
-  const body = def.circle ? M.Bodies.circle(x, y, w / 2, opt) : o.tri ? M.Bodies.polygon(x, y, 3, w / 2, opt) : M.Bodies.rectangle(x, y, w, h, opt);
-  const ob = Object.assign({}, o, { type, def, kind, body, w, h, mat: o.mat || def.mat, hp: o.hp ?? def.hp, price: o.price ?? def.price ?? 0, cracks: [], flash: 0, squash: 0, stage: 0, fixed: o.fix || def.fix || null, pvx: 0, pvy: 0, dead: false });
-  ob.maxHp = ob.hp; body.g = ob;
-  if (kind === 'bubble') M.Body.setInertia(body, Infinity);
-  if (o.ang) M.Body.setAngle(body, o.ang);
-  if (ob.fixed) M.Body.setStatic(body, true);
-  else { if (o.v) M.Body.setVelocity(body, o.v); if (o.av) M.Body.setAngularVelocity(body, o.av); }
-  M.World.add(G.world, body); G.objs.push(ob);
-  return ob;
+export function spawn(type, x, y, z, o = {}) {
+  const def = DEFS[type], size = o.size || def.size, kind = def.kind || 'obj', fixed = !!(o.fixed || def.fixedOnly);
+  const g = new THREE.Group(); def.build(g, o, size); X.level.add(g);
+  const body = new CANNON.Body({
+    mass: fixed ? 0 : (o.mass || def.mass), material: PH.matD, allowSleep: true, sleepSpeedLimit: .3, sleepTimeLimit: .5, linearDamping: .06, angularDamping: .2,
+    collisionFilterGroup: kind === 'frag' ? GR.FRAG : GR.PROP, collisionFilterMask: kind === 'frag' ? (GR.STATIC | GR.PROP) : (GR.STATIC | GR.PROP | GR.FRAG | GR.PLAYER),
+  });
+  body.addShape(def.sphere ? new CANNON.Sphere(size[0] / 2) : new CANNON.Box(new CANNON.Vec3(size[0] / 2, size[1] / 2, size[2] / 2)));
+  body.position.set(x, y, z); if (o.ry) body.quaternion.setFromEuler(0, o.ry, 0);
+  const p = Object.assign({}, o, { type, def, kind, g, body, size, mat: o.mat || def.mat, hp: kind === 'frag' ? null : (o.hp ?? def.hp), price: o.price ?? def.price ?? 0, fixed, punch: 0, dead: false, born: G.tick });
+  p.maxHp = p.hp; body.p = p;
+  if (kind !== 'frag') body.addEventListener('collide', onCollide);
+  if (o.v) body.velocity.set(o.v.x, o.v.y, o.v.z);
+  if (o.av) body.angularVelocity.set(o.av.x, o.av.y, o.av.z);
+  PH.world.addBody(body); G.props.push(p); sync(p);
+  return p;
 }
-export function kill(o) { if (o.dead) return; o.dead = true; G.removeQ.push(o); }
-const pushK = o => clamp(2.2 / Math.sqrt(o.body.mass), .15, 1.6);
-export function shove(o, dx, dy) { if (o.body.isStatic) return; const v = o.body.velocity, k = pushK(o); M.Body.setVelocity(o.body, { x: v.x + dx * k, y: v.y + dy * k }); }
+function sync(p) { p.g.position.copy(p.body.position); p.g.quaternion.copy(p.body.quaternion); }
+export function kill(p) { if (p.dead) return; p.dead = true; G.removeQ.push(p); }
+export function release(p) { if (!p.fixed || p.def.fixedOnly) return; p.fixed = false; const b = p.body; b.type = CANNON.Body.DYNAMIC; b.mass = p.def.mass; b.updateMassProperties(); b.wakeUp(); }
+export function setScreen(p, kind) { const s = p && p.g.userData.screen; if (s) s.material = screenMat(kind); if (p) p.screen = kind; }
 
-export function comboMult() { return G.combo >= 50 ? 3 : G.combo >= 25 ? 2 : G.combo >= 10 ? 1.5 : 1; }
+function onCollide(e) {
+  const p = e.target.p; if (!p || p.dead || p.hp == null || G.tick < G.settle) return;
+  const v = Math.abs(e.contact.getImpactVelocityAlongNormal()); if (v < 3.5) return;
+  const ob = e.body, q = ob.p;
+  let k = 1;
+  if (ob.isPlayer) k = .35; else if (q) { if (q.kind === 'frag') k = .25; else k = MATS[q.mat].hard * clamp(Math.sqrt(ob.mass / Math.max(.5, p.body.mass)), .35, 2.2); }
+  if ((p.thrownT && G.tick - p.thrownT < 150) || (q && q.thrownT && G.tick - q.thrownT < 150)) k *= 1.7;
+  impacts.push({ p, dmg: (v - 3.5) * 7 * MATS[p.mat].weak * k, v, q });
+}
+
+export function comboMult() { return G.combo >= 80 ? 2 : G.combo >= 40 ? 1.5 : G.combo >= 15 ? 1.2 : 1; }
 export function addCombo(n) {
-  const before = comboMult(), b10 = G.combo / 10 | 0;
-  G.combo += n; G.comboT = 90; G.maxCombo = Math.max(G.maxCombo, G.combo);
-  if ((G.combo / 10 | 0) > b10) { G.comboNote = G.combo; sfx('combo', 1, Math.min(8, G.combo / 10 | 0)); }
-  if (comboMult() > before) G.flashW = 3;
+  const b = comboMult(), b10 = G.combo / 10 | 0; G.combo += n; G.comboT = 110; G.maxCombo = Math.max(G.maxCombo, G.combo);
+  if ((G.combo / 10 | 0) > b10) sfx('combo', 1, Math.min(8, G.combo / 10 | 0));
+  if (comboMult() > b) G.flash = 4;
 }
+export function shove(p, ix, iy, iz, spin = 1) {
+  const b = p.body; if (b.mass <= 0) return; b.wakeUp();
+  const k = clamp(2.6 / Math.sqrt(b.mass), .18, 2.2);
+  b.velocity.x += ix * k; b.velocity.y += iy * k; b.velocity.z += iz * k;
+  b.angularVelocity.x += rand(-3, 3) * k * spin; b.angularVelocity.y += rand(-3, 3) * k * spin; b.angularVelocity.z += rand(-3, 3) * k * spin;
+}
+const cp = new CANNON.Vec3();
+export function distTo(p, c, tall = 0) { const b = p.body; if (b.aabbNeedsUpdate) b.updateAABB(); const a = b.aabb; cp.set(clamp(c.x, a.lowerBound.x, a.upperBound.x), clamp(c.y, a.lowerBound.y, a.upperBound.y), clamp(c.z, a.lowerBound.z, a.upperBound.z)); return Math.hypot(c.x - cp.x, Math.max(0, Math.abs(c.y - cp.y) - tall), c.z - cp.z); }
 
-// 반경 안 물건에 피해·밀기. 맞힌 개수를 돌려준다.
-export function attack(cx, cy, r, dmg, push, dx, dy, opt = {}) {
+// 반경 안 물건에 피해·밀기. 맞힌 물건 목록을 돌려준다.
+export function attack(c, r, dmg, imp, opt = {}) {
   const list = [];
-  for (const o of G.objs) {
-    if (o.dead) continue; const b = o.body.bounds;
-    const nx = clamp(cx, b.min.x, b.max.x), ny = clamp(cy, b.min.y, b.max.y), d = Math.hypot(cx - nx, cy - ny);
-    if (d > r) continue;
-    if (o.hp == null) { if (opt.radial) shove(o, (o.body.position.x - cx) / r * push, -push * .6); else shove(o, dx * push * .6, dy * push * .6); continue; }
-    list.push([d, o, nx, ny]);
+  for (const p of G.props) {
+    if (p.dead || p === opt.skip || p.held) continue; const d = distTo(p, c, opt.tall || 0); if (d > r) continue;
+    if (p.hp == null) { shove(p, imp.x * .6, imp.y * .6 + 1, imp.z * .6); continue; }
+    list.push([d, p, cp.x, cp.y, cp.z]);
   }
   list.sort((a, b) => a[0] - b[0]);
-  let hits = 0;
-  for (const [d, o, nx, ny] of list.slice(0, opt.max || 6)) {
+  const out = [];
+  for (const [d, p, x, y, z] of list.slice(0, opt.max || 5)) {
     const k = 1 - d / r * .5;
-    if (opt.radial) { const p = o.body.position; shove(o, clamp((p.x - cx) / 60, -1, 1) * push * .5, -push); } else shove(o, dx * push, dy * push);
-    damage(o, dmg * k, nx, ny); hits++;
-    if (hits === 1) { fx.burst(nx, ny, opt.heavy ? 34 : 22); fx.puff(nx, ny, opt.heavy ? 10 : 6, o.def.cols ? o.def.cols[0] : '#ccc'); }
+    if (opt.radial) { const bp = p.body.position, dx = bp.x - c.x, dz = bp.z - c.z, l = Math.hypot(dx, dz) || 1; shove(p, dx / l * imp.x, imp.y, dz / l * imp.x); } else shove(p, imp.x, imp.y, imp.z);
+    const pt = { x, y, z }; out.push(p);
+    if (out.length === 1) fx.bitsAt(pt, opt.heavy ? 14 : 7, MATS[p.mat].bit, opt.heavy ? 4 : 2.5);
+    damage(p, dmg * k, pt, opt.heavy, true);
   }
-  return hits;
+  return out;
 }
 
-export function damage(o, dmg, x, y) {
-  if (o.dead || o.hp == null) return;
+export function damage(p, dmg, pt, heavy, byPlayer) {
+  if (p.dead || p.hp == null) return;
   if (G.timeScale < 1) dmg *= 2;
-  o.hp -= dmg; o.flash = 3; o.squash = 7;
-  if (o.cracks.length < 6 && dmg > 3) { const p = o.body.position, a = -o.body.angle, lx = x - p.x, ly = y - p.y; o.cracks.push({ x: clamp(lx * Math.cos(a) - ly * Math.sin(a), -o.w / 2 + 4, o.w / 2 - 4), y: clamp(lx * Math.sin(a) + ly * Math.cos(a), -o.h / 2 + 3, o.h / 2 - 3), s: rand(6) }); }
-  if (o.hp <= 0) return breakObj(o);
-  const r = o.hp / o.maxHp;
-  if ((o.fixed === 'wall' || o.fixed === 'ceil') && r <= .5) { M.Body.setStatic(o.body, false); o.fixed = null; }
-  if (o.culprit) { const st = r <= .33 ? 2 : r <= .66 ? 1 : 0; if (st > o.stage) { o.stage = st; G.onStage && G.onStage(o, st); } }
-  sfx(o.kind === 'bubble' ? 'pop' : 'punch', .7);
+  if (p.armor != null && !(p.armorOff)) dmg *= p.armor;
+  p.hp -= dmg; p.punch = 7; p.body.wakeUp();
+  G.onHit && G.onHit(p, dmg, heavy, byPlayer);
+  if (p.dead) return;
+  if (p.hp <= 0) return breakProp(p);
+  if (p.fixed && p.def.wall && p.hp / p.maxHp <= .5) release(p);
+  if (dmg > 2) sfx(heavy ? MATS[p.mat].snd : 'punch', heavy ? .5 : .7);
 }
 
-export function breakObj(o) {
-  if (o.dead) return; o.dead = true; G.removeQ.push(o);
-  const p = o.body.position, m = MATS[o.mat], big = o.price >= 300000;
-  const gain = o.price * comboMult() * G.mult;
-  G.money += gain; G.rage = Math.min(100, G.rage + (o.kind === 'bubble' ? 3 : 5)); addCombo(1);
-  if (o.kind === 'bubble' || o.kind === 'popup') { G.bubbles++; G.bubbleSum += gain; }
-  else { const c = G.counts[o.type] || (G.counts[o.type] = { n: 0, sum: 0, name: o.def.n }); c.n++; c.sum += gain; }
-  if (o.kind === 'bubble') { fx.chars(p.x, p.y, o.w - 20, o.text, o.mine ? '#E5342B' : undefined); sfx('pop'); fx.note(p.x, p.y - 22, '정신적 피해 +' + won(gain)); buzz(8); }
-  else {
-    fx.word(p.x, p.y - o.h / 2 - 6, pick(m.words), o.culprit ? 46 : big ? 38 : 28, o.culprit ? '#FF5C8A' : '#FFD84D');
-    if (gain) fx.note(p.x, p.y - o.h / 2 - 34, '+' + won(gain));
-    sfx(m.snd, big ? 1 : .7); if (o.culprit) sfx('boom');
-    G.shake = Math.max(G.shake, o.culprit ? 18 : big ? 10 : 4); if (big) G.hitstop = Math.max(G.hitstop, 60); buzz(30);
-    frags(o); spill(o);
-  }
-  G.onBreak && G.onBreak(o);
+export function breakProp(p) {
+  if (p.dead) return; p.dead = true; G.removeQ.push(p);
+  const bp = p.body.position, m = MATS[p.mat], big = p.price >= 300000, pos = { x: bp.x, y: bp.y + p.size[1] / 2 + .15, z: bp.z };
+  const gain = p.price * comboMult() * G.mult;
+  G.money += gain; G.rage = Math.min(100, G.rage + 5); addCombo(1);
+  if (gain > 0) { const c = G.counts[p.type] || (G.counts[p.type] = { n: 0, sum: 0, name: p.def.n }); c.n++; c.sum += gain; }
+  fx.text(pos, pick(m.words), 'word' + (big ? ' big' : ''));
+  if (gain > 0) fx.text({ x: pos.x, y: pos.y + .35, z: pos.z }, '+' + won(gain), 'money');
+  sfx(m.snd, big ? 1 : .7); if (p.size[0] * p.size[1] * p.size[2] > .3) sfx('boom', .6);
+  G.shake = Math.max(G.shake, big ? .22 : .08); if (big) G.hitstop = Math.max(G.hitstop, 60); buzz(30);
+  fx.bitsAt(bp, big ? 26 : 12, m.bit, 4.5, 3);
+  frags(p); spill(p);
+  G.onBreak && G.onBreak(p);
 }
 
-function frags(o) {
-  const m = MATS[o.mat]; let n = o.def.frag ?? m.frag; if (G.mobile) n = Math.ceil(n * .7); if (!n) return;
-  const p = o.body.position, v = o.body.velocity, s = clamp(Math.sqrt(o.w * o.h / n) * .7, 6, 26), cols = o.def.cols || ['#bbb'];
-  for (let i = 0; i < n; i++) {
-    const a = rand(6.28), sp = rand(3, 9);
-    spawn('frag', p.x + rand(-.4, .4) * o.w, p.y + rand(-.4, .4) * o.h, { w: s * rand(.6, 1.3), h: s * rand(.5, 1.1), tri: m.tri, col: o.col || pick(cols), mat: o.mat, life: rand(210, 300) | 0, v: { x: v.x + Math.cos(a) * sp, y: v.y + Math.sin(a) * sp - 2 }, av: rand(-.3, .3) });
+const lv = new CANNON.Vec3(), wv = new CANNON.Vec3();
+function frags(p) {
+  let n = p.def.frag ?? 6; if (!n || !p.def.fm || !p.def.fm.length) return; if (G.mobile) n = Math.ceil(n * .6);
+  const [w, h, d] = p.size, cell = Math.cbrt(w * h * d / n), nx = clamp(Math.round(w / cell), 1, 5), ny = clamp(Math.round(h / cell), 1, 5), nz = clamp(Math.round(d / cell), 1, 5);
+  const b = p.body, cap = G.mobile ? 60 : 120;
+  for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) for (let k = 0; k < nz; k++) {
+    if (fragN >= cap) { const old = G.props.find(q => q.type === 'frag' && !q.dead); if (old) { kill(old); fragN--; old.counted = true; } }
+    const sw = w / nx, sh = h / ny, sd = d / nz, size = [Math.max(.03, sw * rand(.55, .95)), Math.max(.03, sh * rand(.55, .95)), Math.max(.03, sd * rand(.55, .95))];
+    lv.set(-w / 2 + (i + .5) * sw, -h / 2 + (j + .5) * sh, -d / 2 + (k + .5) * sd); b.quaternion.vmult(lv, wv);
+    const l = Math.hypot(wv.x, wv.y, wv.z) || 1, sp = rand(1.5, 5);
+    const f = spawn('frag', b.position.x + wv.x, b.position.y + wv.y, b.position.z + wv.z, { size, mass: clamp(size[0] * size[1] * size[2] * 600, .1, 8), mat: p.mat, life: rand(360, 520) | 0, v: { x: b.velocity.x * .6 + wv.x / l * sp + rand(-1, 1), y: b.velocity.y * .6 + wv.y / l * sp + rand(1, 4), z: b.velocity.z * .6 + wv.z / l * sp + rand(-1, 1) }, av: { x: rand(-8, 8), y: rand(-8, 8), z: rand(-8, 8) } });
+    const mesh = bx(f.g, size[0], size[1], size[2], pick(p.def.fm)); mesh.castShadow = false; f.body.quaternion.copy(b.quaternion); fragN++;
   }
 }
-const CMYK = ['#1aa7c7', '#d6338a', '#e8c41c', '#333'];
-function spill(o) {
-  const p = o.body.position, x = p.x, y = p.y;
-  for (const [k, n, a, b] of o.def.spill || []) {
-    if (k === 'a4' || k === 'bills') { const m = G.mobile ? Math.ceil(n * .6) : n; for (let i = 0; i < m; i++) spawn(k === 'a4' ? 'a4' : 'bill', x + rand(-.4, .4) * o.w, y + rand(-.4, .4) * o.h, { life: rand(300, 400) | 0, v: { x: rand(-7, 7), y: rand(-11, -2) }, av: rand(-.3, .3) }); }
-    else if (k === 'crumple' || k === 'balls') for (let i = 0; i < n; i++) spawn(k === 'balls' ? 'ball' : 'crumple', x + rand(-10, 10), y + rand(-10, 10), { life: rand(260, 360) | 0, v: { x: rand(-6, 6), y: rand(-9, -3) } });
-    else if (k === 'keys') fx.puff(x, y, n, '#e8e4da', 7, { size: 5, g: .4, life: 40 });
-    else if (k === 'sparks') { fx.sparks(x, y, n); sfx('zap'); }
-    else if (k === 'smoke') fx.cloud(x, y - 10, n, '#888', 40);
-    else if (k === 'coffee') { fx.drops(x, y, n, '#7a4b22'); stain(x, 536, 18 + n * .6, '#7a4b22'); }
-    else if (k === 'soil') fx.puff(x, y, n, '#6b4a2e', 5, { g: .4 });
-    else if (k === 'water') { fx.drops(x, y, n, '#8fd0ff', 9); stain(x, 538, 60, '#8fd0ff', .5); sfx('water'); }
-    else if (k === 'fish') fx.part({ x, y, vx: 2, vy: -8, col: '#FF8A1F', life: 90, size: 12, type: 'circ', g: .3 });
-    else if (k === 'boom') later(4, () => { explode(x, y, n, a, 12); fx.cloud(x, y, 18, b === 'cmyk' ? pick(CMYK) : b, n * .6); if (b === 'cmyk') CMYK.forEach(c => fx.cloud(x, y, 5, c, n * .7)); stain(x, 536, n * .5, b === 'cmyk' ? '#333' : '#fff', .5); sfx('boom', .8); });
+const CMYK = ['#1aa7c7', '#d6338a', '#e8c41c', '#222222'];
+function spill(p) {
+  const b = p.body.position, pos = { x: b.x, y: b.y, z: b.z };
+  for (const [k, n, a, c] of p.def.spill || []) {
+    if (k === 'sheets') fx.sheet(pos, n, '#ffffff', 3.2);
+    else if (k === 'bills') fx.sheet(pos, n, '#9fd69a', 4.5);
+    else if (k === 'keys') fx.bitsAt(pos, n, '#e4e1d8', 4, 3.5);
+    else if (k === 'sparks') { fx.sparks(pos, n); sfx('zap'); }
+    else if (k === 'smoke') fx.cloud(pos, n, '#555555', .6);
+    else if (k === 'coffee') { fx.bitsAt(pos, n, '#5a3418', 3, 3); fx.stain(b.x, b.z, .25 + n * .012, '#4a2c17', .6); }
+    else if (k === 'soil') { fx.bitsAt(pos, n, '#4a3524', 3, 2.5); fx.stain(b.x, b.z, .35, '#4a3524', .5); }
+    else if (k === 'water') { fx.bitsAt(pos, n, '#8fd0ff', 4.5, 4); fx.stain(b.x, b.z, 1.1, '#6fb6e8', .35); sfx('water'); }
+    else if (k === 'balls') for (let i = 0; i < n; i++) spawn('ball', b.x + rand(-.1, .1), b.y + rand(0, .3), b.z + rand(-.1, .1), { life: 600, v: { x: rand(-4, 4), y: rand(2, 6), z: rand(-4, 4) } });
+    else if (k === 'boom') later(3, () => { explode(pos, n, a, 9); if (c === 'cmyk') CMYK.forEach(cc => fx.cloud(pos, 5, cc, 1.1, .6)); else fx.cloud(pos, 16, c, 1.2, .7); fx.stain(b.x, b.z, n * .35, c === 'cmyk' ? '#222222' : '#ffffff', .45); sfx('boom', .9); });
   }
 }
-
-export function explode(x, y, r, dmg, push) {
-  for (const o of G.objs.slice()) {
-    if (o.dead) continue; const p = o.body.position, d = Math.hypot(p.x - x, p.y - y); if (d > r) continue;
-    const k = 1 - d / r * .6, a = Math.atan2(p.y - y - 12, p.x - x);
-    shove(o, Math.cos(a) * push * k, Math.sin(a) * push * k - push * .3);
-    if (dmg && o.hp != null) damage(o, dmg * k, p.x, p.y);
+export function explode(c, r, dmg, push) {
+  for (const p of G.props.slice()) {
+    if (p.dead || p.held) continue; const bp = p.body.position, dx = bp.x - c.x, dy = bp.y - c.y, dz = bp.z - c.z, d = Math.hypot(dx, dy, dz); if (d > r) continue;
+    const k = 1 - d / r * .6, l = d || 1; shove(p, dx / l * push * k, (dy / l + .7) * push * k, dz / l * push * k);
+    if (dmg && p.hp != null) damage(p, dmg * k, bp, true);
   }
-  G.shake = Math.max(G.shake, 10);
-}
-
-function projHit(pr, t) {
-  if (pr.dead) return;
-  if (!t) { if (!pr.pierce) kill(pr); return; }
-  if (t.hp == null || t.dead || t.kind === 'proj') return;
-  if (!pr.seen) pr.seen = new Set(); if (pr.seen.has(t)) return; pr.seen.add(t);
-  const p = pr.body.position; damage(t, pr.dmg, p.x, p.y); shove(t, Math.sign(pr.pvx || 1) * 4, -1.5); fx.burst(p.x, p.y, 18);
-  addCombo(1); G.rage = Math.min(100, G.rage + 1);
-  if (!pr.pierce) kill(pr);
-}
-function impact(X, Y, rel) {
-  if (!X || X.dead || X.hp == null || X.kind !== 'obj') return;
-  if (Y && Y.kind !== 'obj' && Y.kind !== 'frag') return;
-  const hard = Y ? (Y.kind === 'frag' ? .3 : MATS[Y.mat].hard) : 1, dmg = (rel - 7) * 1.6 * MATS[X.mat].weak * hard;
-  if (dmg >= 1) { const p = X.body.position; damage(X, dmg, p.x, p.y); }
+  G.shake = Math.max(G.shake, .3);
 }
 
 export function tick() {
   G.real++;
   if (G.timeScale < 1 && G.real >= G.slowUntil) G.timeScale = 1;
-  if (G.flashW > 0) G.flashW--;
+  if (G.flash > 0) G.flash--;
   if (G.hitstop > 0) { G.hitstop -= 16.7; return; }
-  G.slowAcc += G.timeScale; if (G.slowAcc < 1) return; G.slowAcc -= 1;
   G.tick++;
+  const dt = DT * G.timeScale;
   for (let i = G.timers.length - 1; i >= 0; i--) if (G.timers[i].t <= G.tick) { const t = G.timers.splice(i, 1)[0]; t.fn(); }
-  G.onTick && G.onTick();
-  if (!G.engine) return;
-  for (const o of G.objs) {
-    const b = o.body, v = b.velocity; o.pvx = v.x; o.pvy = v.y;
-    if (o.flash > 0) o.flash--; if (o.squash > 0) o.squash--;
-    if (o.kind === 'bubble') M.Body.applyForce(b, b.position, { x: 0, y: -b.mass * .0008 });
-    else if (o.pierce) M.Body.applyForce(b, b.position, { x: 0, y: -b.mass * .001 });
-    const sp = Math.hypot(v.x, v.y); if (sp > 40) M.Body.setVelocity(b, { x: v.x / sp * 40, y: v.y / sp * 40 });
-    if (o.life != null && --o.life <= 0 && !o.dead) { if (o.kind !== 'proj' && sp < 1.5 && b.position.y > 470) bake(o); kill(o); }
+  G.onTick && G.onTick(dt);
+  if (!PH.world) return;
+  for (const p of G.props) if (p.thrownT && G.tick - p.thrownT < 150) { const v = p.body.velocity; (p.pv || (p.pv = {})).x = v.x; p.pv.y = v.y; p.pv.z = v.z; }
+  PH.world.step(dt);
+  const im = impacts; impacts = [];
+  for (const m of im) {
+    const p = m.p; if (p.dead) continue; damage(p, m.dmg, p.body.position, true); if (m.v > 6) sfx(MATS[p.mat].snd, Math.min(.6, m.v / 20));
+    // 유리는 던진 물건을 막지 않는다: 깨졌으면 부딪히기 전 속도를 돌려준다
+    if (p.dead && p.fixed && p.mat === 'glass' && m.q && !m.q.dead && m.q.pv) m.q.body.velocity.set(m.q.pv.x * .85, m.q.pv.y * .85, m.q.pv.z * .85);
   }
-  M.Engine.update(G.engine, 1000 / 60);
-  const hs = G.hits; G.hits = [];
-  for (let i = 0; i < hs.length; i += 2) {
-    const A = hs[i].g, B = hs[i + 1].g;
-    if (A && A.kind === 'proj') projHit(A, B); if (B && B.kind === 'proj') projHit(B, A);
-    if (G.tick < G.settle) continue;
-    const rel = Math.hypot((A ? A.pvx : 0) - (B ? B.pvx : 0), (A ? A.pvy : 0) - (B ? B.pvy : 0));
-    if (rel < 7) continue;
-    impact(A, B, rel); impact(B, A, rel);
+  for (const p of G.props) {
+    if (p.dead) continue; const b = p.body;
+    if (b.sleepState !== 2 || p.punch > 0 || p.held) {
+      sync(p);
+      const v = b.velocity, sp = v.length(); if (sp > 32) v.scale(32 / sp, v);
+    }
+    if (p.punch > 0) { p.punch--; const s = 1 + p.punch * .012; p.g.scale.set(s, s, s); }
+    if (p.life != null) { if (--p.life <= 0) kill(p); else if (p.life < 30) { const s = p.life / 30; p.g.scale.set(s, s, s); } }
+    if (p.hp != null && p.def.elec && p.hp / p.maxHp < .5 && G.tick % 14 === 0) { fx.cloud({ x: b.position.x, y: b.position.y + p.size[1] / 2, z: b.position.z }, 1, '#444444', .35, .1); if (p.hp / p.maxHp < .25 && G.tick % 28 === 0) fx.sparks(b.position, 4); }
+    const bp = b.position;
+    if (!p.fixed && !p.held && G.scene === 'office' && (bp.z < -9.5 || bp.x < -14.4 || bp.x > 14.4 || bp.z > 9.4 || bp.y < -3)) {
+      if (!p.out && p.kind === 'obj') {
+        p.out = true; const gain = Math.max(p.price, 20000) * 2 * G.mult; G.money += gain; addCombo(2);
+        const c = G.counts.out || (G.counts.out = { n: 0, sum: 0, name: '창밖으로 던진 물건' }); c.n++; c.sum += gain;
+        fx.text({ x: clamp(bp.x, -13, 13), y: 2.2, z: Math.max(bp.z, -8.6) }, '창밖으로! +' + won(gain), 'money'); sfx('up', .6); G.onOut && G.onOut(p);
+      }
+      if (bp.y < -6) kill(p);
+    } else if (bp.y < -30) kill(p);
   }
-  const cap = G.mobile ? 100 : 140;
-  if (G.objs.length > cap) { let n = G.objs.length - cap; for (const o of G.objs) { if (n <= 0) break; if (!o.dead && (o.kind === 'frag' || o.kind === 'paper')) { if (o.body.position.y > 470) bake(o); kill(o); n--; } } }
-  if (G.removeQ.length) { for (const o of G.removeQ) M.World.remove(G.world, o.body); G.removeQ = []; G.objs = G.objs.filter(o => !o.dead); }
-  fx.update();
+  if (G.removeQ.length) {
+    for (const p of G.removeQ) { PH.world.removeBody(p.body); X.level.remove(p.g); if (p.type === 'frag' && !p.counted) fragN--; }
+    G.removeQ = []; G.props = G.props.filter(p => !p.dead);
+  }
+  fx.update(dt);
   if (G.comboT > 0 && --G.comboT === 0) G.combo = 0;
-  G.shake *= .86; if (G.shake < .3) G.shake = 0;
+  G.shake *= .86; if (G.shake < .004) G.shake = 0;
 }

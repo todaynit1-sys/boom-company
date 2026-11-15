@@ -46,6 +46,8 @@ const SFX = {
   up(v) { [523, 659, 784].forEach((f, i) => tone(f, f, .16, v * .25, 'triangle', i * .1)); },
   jump(v, p) { tone(280 * p, 520 * p, .09, v * .12, 'triangle'); },
   type(v, p) { noise(.02, v * .25, 'highpass', 2500); tone(1200 * p, 800, .02, v * .1, 'square'); },
+  step(v, p) { noise(.035, v * .5, 'lowpass', 500 * p); },
+  ding(v) { tone(1320, 1320, .5, v * .25, 'sine'); tone(990, 990, .6, v * .2, 'sine', .22); },
   special(v) { tone(200, 900, .35, v * .4, 'sawtooth'); noise(.35, v * .3, 'bandpass', 600, 1, 0, 3000); },
 };
 export function sfx(name, vol = 1, k) {

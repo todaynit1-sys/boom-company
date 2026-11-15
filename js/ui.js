@@ -1,9 +1,7 @@
-import { S, save, RANKS, rankOf, DEF_COMPANY, copy } from './save.js';
+import { S, save, RANKS, rankOf, DEF_COMPANY } from './save.js';
 import { CHARS, ACCS } from './data/chars.js';
-import { ROOMS, ROOM_IDS } from './data/rooms.js';
 import { SETS, WHOS, MOTTOS } from './data/lines.js';
-import { G, won, pick } from './state.js';
-import { drawChar } from './player.js';
+import { G, won } from './state.js';
 import { sfx } from './audio.js';
 
 export const act = {};
@@ -11,116 +9,127 @@ const $ = id => document.getElementById(id);
 const show = (id, on) => $(id).classList.toggle('off', !on);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const STYLES = [{ v: 'glass', n: '유리 빌딩', rank: 0 }, { v: 'brick', n: '벽돌 상가', rank: 1 }, { v: 'gov', n: '관공서풍', rank: 3 }];
-const SCREENS = ['s-title', 's-build', 's-chars', 's-endless', 's-pause', 's-bill', 's-fake'];
-function only(id) { SCREENS.forEach(s => show(s, s === id)); }
+const SCREENS = ['s-title', 's-pick', 's-build', 's-chars', 's-pause', 's-bill', 's-fake'];
+export function only(id) { SCREENS.forEach(s => show(s, s === id)); }
 export function charName(id) { return S.charName[id] || CHARS[id].n; }
+const lockOf = r => rankOf(S.total) >= r ? null : RANKS[r].n;
 
 function chips(box, items, isOn, onClick) {
   box.textContent = '';
   for (const it of items) {
     const b = el('button', 'chip' + (isOn(it.v) ? ' on' : '') + (it.lock ? ' lock' : ''), it.n + (it.lock ? ' (' + it.lock + ')' : ''));
-    b.type = 'button'; b.onclick = () => { if (it.lock) return toast(it.lock + '부터 쓸 수 있어요'); sfx('type'); onClick(it.v); };
+    b.type = 'button'; b.onclick = () => { if (it.lock) return toast(it.lock + ' 직급부터 쓸 수 있어요'); sfx('type'); onClick(it.v); };
     box.appendChild(b);
   }
 }
-const lockOf = r => rankOf(S.total) >= r ? null : RANKS[r].n;
-
 let toastT;
-export function toast(s) { const t = $('toast'); t.textContent = s; t.classList.remove('off'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('off'), 1900); }
+export function toast(s) { const t = $('toast'); t.textContent = s; t.classList.remove('off'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('off'), 2000); }
 
 // ───── 첫 화면
 export function showTitle() {
-  only('s-title'); hudShow(false); over('');
+  only('s-title'); hudShow(false); over(''); objectives(null); prompt(null); subtitle(null);
   const r = rankOf(S.total), nx = RANKS[r + 1];
   $('t-rank').textContent = RANKS[r].n;
   $('t-rankbar').style.width = (nx ? Math.min(100, (S.total - RANKS[r].at) / (nx.at - RANKS[r].at) * 100) : 100) + '%';
-  $('t-total').textContent = '누적 ' + won(S.total);
-  $('o-snd').checked = !S.mute; $('o-hap').checked = S.haptic; $('o-calm').checked = S.calm;
+  $('t-total').textContent = '누적 피해액 ' + won(S.total);
+  $('o-snd').checked = !S.mute; $('o-voice').checked = S.voice; $('o-hap').checked = S.haptic; $('o-calm').checked = S.calm;
+}
+function showPick(missions, ids) {
+  only('s-pick'); const box = $('pk-list'); box.textContent = '';
+  for (const id of [...ids, 'resign']) {
+    const m = missions[id], b = el('button', 'pk'); b.appendChild(el('small', '', m.time)); b.appendChild(el('b', '', m.n)); b.appendChild(el('span', '', m.sub + ' · ' + m.steps.length + '단계'));
+    b.onclick = () => act.single(id); box.appendChild(b);
+  }
 }
 
-// ───── 회사 짓기
+// ───── 회사 설정
 function fillBuilder() {
-  const B = S.company, ch = () => { save(); fillBuilder(); act.preview(); };
+  const B = S.company, ch = () => { save(); fillBuilder(); };
   $('c-name').value = B.name;
-  chips($('c-style'), STYLES.map(s => ({ v: s.v, n: s.n, lock: lockOf(s.rank) })), v => B.style === v, v => { B.style = v; ch(); });
-  chips($('c-n'), [3, 4, 5, 6].map(n => ({ v: n, n: n + '층' })), v => B.floors.length + 1 === v, v => { while (B.floors.length > v - 1) B.floors.pop(); while (B.floors.length < v - 1) B.floors.push(pick(ROOM_IDS)); ch(); });
-  const fl = $('c-floors'); fl.textContent = '';
-  const top = el('div', 'fl'); top.appendChild(el('b', '', B.floors.length + 1 + '층')); top.appendChild(el('span', 'chip on', '대표실 (고정)')); fl.appendChild(top);
-  for (let i = B.floors.length - 1; i >= 0; i--) {
-    const row = el('div', 'fl'), box = el('div', 'chips'); row.appendChild(el('b', '', i + 1 + '층')); row.appendChild(box); fl.appendChild(row);
-    chips(box, ROOM_IDS.map(id => ({ v: id, n: ROOMS[id].n })), v => B.floors[i] === v, v => { B.floors[i] = v; ch(); });
-  }
   chips($('c-who'), WHOS.map(w => ({ v: w, n: w })), v => B.who === v, v => { B.who = v; $('c-who2').value = ''; ch(); });
   if (!WHOS.includes(B.who)) $('c-who2').value = B.who;
+  chips($('c-motto'), MOTTOS.map(m => ({ v: m, n: m })), v => B.motto === v, v => { B.motto = v; $('c-motto2').value = ''; ch(); });
+  if (!MOTTOS.includes(B.motto)) $('c-motto2').value = B.motto;
   chips($('c-sets'), Object.keys(SETS).map(k => ({ v: k, n: SETS[k].n })), v => B.sets.includes(v), v => {
     if (B.sets.includes(v)) { if (B.sets.length > 1) B.sets = B.sets.filter(x => x !== v); } else if (B.sets.length < 3) B.sets.push(v); else return toast('3개까지 고를 수 있어요'); ch();
   });
   document.querySelectorAll('.c-my').forEach((inp, i) => { inp.value = B.myLines[i] || ''; });
-  chips($('c-motto'), MOTTOS.map(m => ({ v: m, n: m })), v => B.motto === v, v => { B.motto = v; $('c-motto2').value = ''; ch(); });
-  if (!MOTTOS.includes(B.motto)) $('c-motto2').value = B.motto;
-  const sl = [];
-  S.slots.forEach((s, i) => { sl.push({ v: 's' + i, n: `${i + 1}번에 저장` }); if (s) sl.push({ v: 'l' + i, n: `${i + 1}번 불러오기: ${s.name}` }); });
-  chips($('c-slots'), sl, () => false, v => { const i = +v[1]; if (v[0] === 's') { S.slots[i] = copy(B); toast(`${i + 1}번 칸에 저장했어요`); } else { S.company = copy(S.slots[i]); toast('불러왔어요'); } ch(); });
+  chips($('c-style'), STYLES.map(s => ({ v: s.v, n: s.n, lock: lockOf(s.rank) })), v => B.style === v, v => { B.style = v; ch(); });
 }
 export function showBuilder() { only('s-build'); fillBuilder(); }
 
-// ───── 캐릭터
+// ───── 캐릭터 (뒤의 3D 화면에 고른 캐릭터가 보인다)
 function fillChars() {
   const list = $('ch-list'); list.textContent = '';
   for (const id of Object.keys(CHARS)) {
     const c = CHARS[id], lock = lockOf(c.rank), card = el('div', 'chc' + (S.char === id ? ' on' : '') + (lock ? ' lock' : ''));
-    const cv = document.createElement('canvas'); cv.width = cv.height = 168; const x = cv.getContext('2d'); x.scale(2, 2);
-    drawChar(x, id, 36, 44, { acc: S.char === id ? S.acc : null, swing: .35 });
-    card.appendChild(cv); card.appendChild(el('b', '', charName(id))); card.appendChild(el('span', '', lock ? lock + '부터' : c.desc));
-    const sp = el('div', 'hint', '필살기: ' + c.sp.name); card.appendChild(sp);
-    card.onclick = () => { if (lock) return toast(lock + ' 직급부터 쓸 수 있어요'); S.char = id; save(); sfx('up'); fillChars(); };
+    const dot = el('i'); dot.style.background = c.suit; card.appendChild(dot);
+    card.appendChild(el('b', '', charName(id))); card.appendChild(el('span', '', lock ? lock + '부터' : c.desc)); card.appendChild(el('div', 'hint', '필살기 ' + c.sp.name));
+    card.onclick = () => { if (lock) return toast(lock + ' 직급부터 쓸 수 있어요'); S.char = id; save(); sfx('up'); fillChars(); act.preview(true); };
     list.appendChild(card);
   }
   $('ch-name').value = charName(S.char);
-  chips($('ch-acc'), ACCS.map(a => ({ v: a.id, n: a.n, lock: lockOf(a.rank) })), v => S.acc === v, v => { S.acc = v; save(); fillChars(); });
+  chips($('ch-acc'), ACCS.map(a => ({ v: a.id, n: a.n, lock: lockOf(a.rank) })), v => S.acc === v, v => { S.acc = v; save(); fillChars(); act.preview(true); });
 }
-export function showChars() { only('s-chars'); fillChars(); }
+export function showChars() { only('s-chars'); fillChars(); act.preview(true); }
 
 // ───── 게임 중 표시
-export function hudShow(on) {
-  $('hud').classList.toggle('off', !on); show('pad', on && G.mobile);
-  if (!on) show('keys', false);
-  window.dispatchEvent(new Event('resize'));
-}
-export function keysHint(on) { if (G.mobile) return; const k = $('keys'); k.innerHTML = '<b>← →</b>이동 <b>↑</b>점프 <b>Z</b>때리기(누르고 있으면 연타) <b>X</b>강타(공중: 내려찍기) <b>C</b>필살기'; show('keys', on); }
-let lastHud = {};
+export function hudShow(on) { show('hud', on); show('status', on); show('pad', on && G.mobile); show('cross', on && !G.mobile); if (!on) { show('keys', false); show('obj', false); } }
+export function keysHint(on) { if (G.mobile) return; const k = $('keys'); k.innerHTML = '<b>WASD</b>이동<b>마우스</b>시점(화면을 클릭하면 고정)<b>스페이스</b>점프<br><b>좌클릭</b>때리기<b>우클릭</b>강타<b>E</b>집기·던지기·엎기<b>Q</b>필살기'; show('keys', on); }
+let last = {};
 export function hud(d) {
-  const set = (id, k, v) => { if (lastHud[k] !== v) { lastHud[k] = v; $(id).textContent = v; } };
-  set('h-floor', 'f', d.floor); set('h-sub', 's', d.sub); set('h-money', 'm', won(d.money));
-  set('h-time', 't', d.time); set('h-combo', 'c', d.combo >= 5 ? '연타 ' + d.combo + (d.mult > 1 ? ' ×' + d.mult : '') : '');
-  set('h-pct', 'p', d.stress == null ? '' : Math.round(d.stress) + '%'); set('h-cname', 'n', d.cname || '');
-  if (d.stress != null) { $('h-stress').style.width = d.stress + '%'; const f = d.stress > 60 ? 0 : d.stress > 0 ? 1 : 2; if (lastHud.face !== f) { lastHud.face = f; $('h-face').className = 'face f' + f; } }
-  $('h-chp').style.width = Math.max(0, d.chp * 100) + '%';
-  const sp = $('p-sp'); const ready = d.rage >= 100; if (lastHud.r !== ready) { lastHud.r = ready; sp.classList.toggle('ready', ready); }
-  if (!ready) sp.style.background = `linear-gradient(90deg,#FF5C8A ${d.rage}%,#bbb ${d.rage}%)`; else sp.style.background = '';
+  const set = (id, k, v) => { if (last[k] !== v) { last[k] = v; $(id).textContent = v; } };
+  set('h-title', 'f', d.title); set('h-sub', 's', d.sub); set('h-money', 'm', won(d.money)); set('h-time', 't', d.time);
+  set('h-combo', 'c', d.combo >= 5 ? '연타 ' + d.combo + (d.combo >= 15 ? ' ×' + (d.combo >= 80 ? 2 : d.combo >= 40 ? 1.5 : 1.2) : '') : '');
+  set('h-weapon', 'w', d.weapon || '');
+  const has = d.stress != null; if (last.has !== has) { last.has = has; $('h-stressbox').style.visibility = has ? 'visible' : 'hidden'; }
+  if (has) { set('h-pct', 'p', Math.round(d.stress) + '%'); $('h-stress').style.width = d.stress + '%'; const f = d.stress > 60 ? 0 : d.stress > 0 ? 1 : 2; if (last.face !== f) { last.face = f; $('h-face').className = 'face f' + f; } }
+  $('h-rage').style.width = d.rage + '%'; const ready = d.rage >= 100;
+  if (last.r !== ready) { last.r = ready; $('status').classList.toggle('ready', ready); $('p-sp').classList.toggle('ready', ready); $('h-ragel').textContent = ready ? (G.mobile ? '필살기!' : 'Q 필살기!') : '필살기'; }
 }
+export function objectives(list, idx, hint) {
+  const o = $('obj'); if (!list) return show('obj', false); show('obj', true); o.textContent = '';
+  const h = el('h3'); h.appendChild(el('span', '', idx < 0 ? '자유 난동' : '할 일')); if (idx >= 0) h.appendChild(el('span', '', Math.min(idx, list.length) + ' / ' + list.length)); o.appendChild(h);
+  list.forEach((t, i) => { const d = el('div', idx < 0 ? 'now' : i < idx ? 'done' : i === idx ? 'now' : ''); d.appendChild(el('i', '', i < idx && idx >= 0 ? '✓' : '')); d.appendChild(el('span', '', t)); if (idx < 0) d.style.background = 'none'; o.appendChild(d); });
+  if (hint) o.appendChild(el('p', '', '→ ' + hint));
+  if (idx >= list.length) o.appendChild(el('p', '', '→ 전부 완료! 마음껏 부수세요'));
+}
+let pBusy = false;
+export const promptBusy = () => pBusy;
+export function prompt(text, prog = 0, wait) {
+  const p = $('prompt'); pBusy = !!text; if (!text) { if (!p.classList.contains('soft')) show('prompt', false); return; }
+  show('prompt', true); p.classList.remove('soft'); p.firstElementChild.textContent = wait ? text : (G.mobile ? '[행동] ' : '[E] ') + text;
+  const b = p.lastElementChild; b.style.display = prog > 0 || wait ? 'block' : 'none'; b.firstElementChild.style.width = Math.min(100, prog * 100) + '%';
+}
+export function hint(text, prog = 0) {
+  const p = $('prompt'); if (pBusy) return; if (!text) { show('prompt', false); p.classList.remove('soft'); return; }
+  show('prompt', true); p.classList.add('soft'); p.firstElementChild.textContent = G.mobile ? text.replace(/^E 꾹/, '[행동] 꾹').replace(/^E /, '[행동] ') : text;
+  const b = p.lastElementChild; b.style.display = prog > 0 ? 'block' : 'none'; b.firstElementChild.style.width = Math.min(100, prog * 100) + '%';
+}
+let subT;
+export function subtitle(who, text) { const s = $('subt'); clearTimeout(subT); if (!text) return show('subt', false); show('subt', true); s.firstElementChild.textContent = who; s.lastElementChild.textContent = text; subT = setTimeout(() => show('subt', false), 1400 + text.length * 110); }
 let overT;
 export function over(html) { clearTimeout(overT); $('over').innerHTML = html; }
 export function card(small, title, sub, rows, cb) {
   const o = $('over'); o.textContent = ''; clearTimeout(overT);
   const c = el('div', 'card'); c.appendChild(el('small', '', small)); c.appendChild(el('b', '', title)); c.appendChild(el('span', '', sub));
-  const t = el('table'); const tr = el('tr'); rows.forEach(r => tr.appendChild(el('td', '', r))); t.appendChild(tr); c.appendChild(t);
+  const t = el('table'), tr = el('tr'); rows.forEach(r => tr.appendChild(el('td', '', r))); t.appendChild(tr); c.appendChild(t); c.appendChild(el('em', '', '누르면 바로 시작'));
   let done = false; const go = () => { if (done) return; done = true; clearTimeout(overT); o.textContent = ''; cb(); };
-  c.onclick = go; o.appendChild(c); overT = setTimeout(go, 2200);
+  c.onclick = go; o.appendChild(c); overT = setTimeout(go, 3000);
 }
 export function stamp(text, cls, small) { const o = $('over'); o.textContent = ''; const s = el('div', 'stamp ' + cls, text); if (small) s.appendChild(el('small', '', small)); o.appendChild(s); }
 export function big(text, sub) { const o = $('over'); o.textContent = ''; o.appendChild(el('div', 'big', text)); if (sub) o.appendChild(el('div', 'sub', sub)); }
 export function mash(text) { const o = $('over'); o.textContent = ''; o.appendChild(el('div', 'mash', text)); }
 
 // ───── 청구서
-const TITLES = [[3e7, '참을 인 세 번'], [6e7, '소심한 반항러'], [1e8, '프로 퇴근러'], [1.5e8, '총무팀의 악몽'], [Infinity, '걸어 다니는 철거반']];
+const TITLES = [[3e7, '참을 인 세 번'], [9e7, '소심한 반항러'], [1.8e8, '프로 퇴근러'], [3e8, '총무팀의 악몽'], [Infinity, '걸어 다니는 철거반']];
 export function bill(d) {
-  only('s-bill'); hudShow(false); over('');
+  only('s-bill'); hudShow(false); over(''); subtitle(null);
   const b = $('bill'); b.textContent = '';
   b.appendChild(el('h2', '', '비품 파손 청구서'));
   b.appendChild(el('div', 'meta', `${d.company} 귀하 · ${new Date().toLocaleDateString('ko-KR')} · 담당 ${d.who}`));
   const items = Object.values(d.counts).sort((a, c) => c.sum - a.sum).slice(0, 8).map(c => [`${c.name} ×${c.n}`, won(c.sum)]);
-  if (d.bubbles) items.push([`정신적 피해 (잔소리 ${d.bubbles}건)`, won(d.bubbleSum)]);
+  if (d.nags) items.push([`정신적 피해 위자료 (잔소리 ${d.nags}건)`, won(d.nagSum)]);
   if (!items.length) items.push(['부순 것이 없습니다', '0원']);
   items.forEach(([a, c], i) => { const li = el('div', 'li'); li.style.animationDelay = (.3 + i * .13) + 's'; li.appendChild(el('span', '', a)); li.appendChild(el('span', '', c)); b.appendChild(li); setTimeout(() => sfx('type'), 300 + i * 130); });
   const sum = el('div', 'sum'); sum.appendChild(el('span', '', '합계')); sum.appendChild(el('b', '', won(d.total))); b.appendChild(sum);
@@ -136,14 +145,12 @@ export function bill(d) {
   const btns = el('div', 'p-btns');
   const mk = (t, cls, fn) => { const x = el('button', 'btn ' + cls, t); x.onclick = fn; btns.appendChild(x); };
   mk('한 판 더', 'main', () => act.again());
-  mk('회사 고치기', '', () => { act.title(); showBuilder(); });
   mk('결과 복사', '', () => { const s = `[회사 뿌시기] ${d.company} 비품 파손 청구서 — 합계 ${won(d.total)}, 최고 연타 ${d.maxCombo}`; (navigator.clipboard ? navigator.clipboard.writeText(s) : Promise.reject()).then(() => toast('복사했어요'), () => toast('복사하지 못했어요')); });
   mk('처음으로', '', () => act.title());
   b.appendChild(btns);
   if (d.promo) setTimeout(() => sfx('up'), 2000);
 }
 
-// ───── 일시정지 · 위장
 export function pause(on) { show('s-pause', on); }
 export function fake(on) {
   show('s-fake', on); if (!on) return;
@@ -152,24 +159,18 @@ export function fake(on) {
   for (let r = 0; r < 18; r++) { const tr = t.insertRow(); heads.forEach((h, c) => { const td = tr.insertCell(); td.textContent = r === 0 ? h : c === 0 ? r : c === 1 ? ['영업1팀', '영업2팀', '기획팀', '총무팀', '개발팀', '인사팀'][r % 6] : c === 6 ? '' : c === 4 || c === 5 ? (60 + (r * 37 + c * 11) % 55) + '%' : ((r * 7919 + c * 104729) % 9000 + 1000).toLocaleString(); }); }
 }
 
-export function init() {
-  $('b-quick').onclick = () => act.quick(); $('b-build').onclick = showBuilder; $('b-chars').onclick = showChars;
-  $('b-endless').onclick = () => { only('s-endless'); chips($('e-rooms'), [...ROOM_IDS, 'ceo'].map(id => ({ v: id, n: ROOMS[id].n })), () => false, v => act.endless(v)); };
-  $('e-back').onclick = showTitle;
-  $('o-snd').onchange = e => { S.mute = !e.target.checked; save(); }; $('o-hap').onchange = e => { S.haptic = e.target.checked; save(); }; $('o-calm').onchange = e => { S.calm = e.target.checked; G.calm = S.calm; save(); };
-  const B = () => S.company, upd = () => { save(); act.preview(); };
-  $('c-name').oninput = e => { B().name = e.target.value.trim() || DEF_COMPANY.name; upd(); };
-  $('c-who2').oninput = e => { const v = e.target.value.trim(); B().who = v || '부장님'; save(); }; $('c-who2').onchange = fillBuilder;
-  $('c-motto2').oninput = e => { const v = e.target.value.trim(); B().motto = v || MOTTOS[0]; save(); }; $('c-motto2').onchange = fillBuilder;
+export function init(missions, ids) {
+  $('b-course').onclick = () => act.course(); $('b-pick').onclick = () => showPick(missions, ids); $('b-free').onclick = () => act.free();
+  $('b-build').onclick = showBuilder; $('b-chars').onclick = showChars; $('pk-back').onclick = () => only('s-title');
+  $('o-snd').onchange = e => { S.mute = !e.target.checked; save(); }; $('o-voice').onchange = e => { S.voice = e.target.checked; save(); };
+  $('o-hap').onchange = e => { S.haptic = e.target.checked; save(); }; $('o-calm').onchange = e => { S.calm = e.target.checked; G.calm = S.calm; save(); };
+  const B = () => S.company;
+  $('c-name').oninput = e => { B().name = e.target.value.trim() || DEF_COMPANY.name; save(); };
+  $('c-who2').oninput = e => { B().who = e.target.value.trim() || '부장님'; save(); }; $('c-who2').onchange = fillBuilder;
+  $('c-motto2').oninput = e => { B().motto = e.target.value.trim() || MOTTOS[0]; save(); }; $('c-motto2').onchange = fillBuilder;
   document.querySelectorAll('.c-my').forEach((inp, i) => { inp.oninput = e => { B().myLines[i] = e.target.value; save(); }; });
-  $('c-rand').onclick = () => {
-    const n = 2 + (Math.random() * 4 | 0), names = ['열정페이', '야근공화국', '월급루팡', '가족같은회사', '주말출근', '회의지옥'];
-    Object.assign(B(), { name: pick(names), style: pick(STYLES.filter(s => !lockOf(s.rank))).v, floors: Array.from({ length: n }, () => pick(ROOM_IDS)), who: pick(WHOS), sets: Object.keys(SETS).sort(() => Math.random() - .5).slice(0, 2), motto: pick(MOTTOS) });
-    upd(); fillBuilder(); sfx('up');
-  };
-  $('c-back').onclick = showTitle; $('c-go').onclick = () => act.quick();
+  $('c-back').onclick = () => { act.preview(); only('s-title'); }; $('c-go').onclick = () => act.course();
   $('ch-name').oninput = e => { const v = e.target.value.trim(); if (v) S.charName[S.char] = v; else delete S.charName[S.char]; save(); };
   $('ch-ok').onclick = () => { act.preview(); showTitle(); };
-  $('b-pause').onclick = () => act.pause(); $('p-resume').onclick = () => act.pause(); $('p-quit').onclick = () => act.quit();
+  $('b-pause').onclick = () => act.pause(); $('p-resume').onclick = () => act.pause(); $('p-quit').onclick = () => act.quit(); $('p-title').onclick = () => act.home();
 }
-export { only };

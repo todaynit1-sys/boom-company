@@ -1,22 +1,16 @@
-// cd는 밀리초, 나머지는 세계 단위
+// spd m/s, jump m/s, pow 피해 배수, rate 공격 속도 배수
 export const CHARS = {
-  kim: { n: '김대리', desc: '균형형 · 서류가방', col: '#2F6BFF', spd: 5.2, jump: 13, wpn: 'bag',
-    A: { dmg: 10, cd: 140, r: 46, push: 4 }, B: { dmg: 36, cd: 520, r: 70, push: 14 },
-    sp: { type: 'quake', n: 1, dmg: 40, slow: true, name: '책상 쾅' }, rank: 0 },
-  park: { n: '박인턴', desc: '빠른 연타 · 2단 점프', col: '#F2B705', spd: 6.6, jump: 13.4, dj: true, wpn: 'fist',
-    A: { dmg: 7, cd: 85, r: 40, push: 3 }, B: { dmg: 24, cd: 420, r: 60, push: 11 },
+  kim: { n: '김대리', desc: '균형형 · 무난하게 다 잘함', suit: '#2b4a8a', tie: '#c9281f', hair: 'short', spd: 5.4, jump: 6.6, pow: 1, rate: 1, build: 1,
+    sp: { type: 'quake', n: 1, dmg: 45, slow: true, name: '책상 쾅' }, rank: 0 },
+  park: { n: '박인턴', desc: '빠른 연타 · 2단 점프', suit: '#d9a520', tie: null, hair: 'mop', spd: 6.6, jump: 6.9, dj: true, pow: .75, rate: 1.6, build: .93,
     sp: { type: 'rush', name: '믹스커피 폭주' }, rank: 0 },
-  choi: { n: '최과장', desc: '느리지만 한 방 · 오함마', col: '#E5342B', spd: 4.0, jump: 12, wpn: 'hammer',
-    A: { dmg: 16, cd: 230, r: 58, push: 7 }, B: { dmg: 70, cd: 800, r: 100, push: 20 },
-    sp: { type: 'quake', n: 3, dmg: 45, name: '지진' }, rank: 0 },
-  lee: { n: '이주임', desc: '멀리서 던지기', col: '#1F9D57', spd: 5.0, jump: 13, wpn: 'stapler',
-    A: { dmg: 12, cd: 200, proj: 'stapler' }, B: { dmg: 30, cd: 500, proj: 'binderang', pierce: true },
+  choi: { n: '최과장', desc: '느리지만 한 방이 큼', suit: '#5a5f66', tie: '#2b4a8a', hair: 'bald', spd: 4.5, jump: 6.0, pow: 1.6, rate: .75, build: 1.14,
+    sp: { type: 'quake', n: 3, dmg: 48, name: '지진' }, rank: 0 },
+  lee: { n: '이주임', desc: '던지기 달인 · 서류 폭풍', suit: '#2a7a4a', tie: null, hair: 'bob', glasses: true, spd: 5.4, jump: 6.6, pow: .9, rate: 1.1, build: .95, thr: 1.5,
     sp: { type: 'storm', name: '서류 폭풍' }, rank: 0 },
-  jung: { n: '정차장', desc: '골프채로 날리기', col: '#7B4BD6', spd: 4.8, jump: 12.6, wpn: 'golf',
-    A: { dmg: 12, cd: 200, r: 54, push: 6, up: true }, B: { dmg: 40, cd: 600, r: 80, push: 26, word: '나이스 샷!' },
+  jung: { n: '정차장', desc: '골프 스윙 · 멀리 날림', suit: '#6a3fb0', tie: '#e3b23c', hair: 'cap', spd: 5.0, jump: 6.3, pow: 1.15, rate: .95, build: 1.05, launch: 1.6,
     sp: { type: 'line', name: '홀인원' }, rank: 4 },
-  free: { n: '자유인', desc: '사직서 수리검 · 2단 점프', col: '#FF8A1F', spd: 5.8, jump: 13.4, dj: true, wpn: 'envelope',
-    A: { dmg: 9, cd: 150, proj: 'envelope', pierce: true }, B: { dmg: 30, cd: 400, r: 70, push: 14 },
+  free: { n: '자유인', desc: '2단 점프 · 사직서 폭탄', suit: '#e5701f', tie: null, hair: 'short', sun: true, spd: 6.0, jump: 6.9, dj: true, pow: 1.1, rate: 1.2, build: 1,
     sp: { type: 'rain', name: '사직서 폭탄' }, rank: 6 },
 };
 export const ACCS = [
