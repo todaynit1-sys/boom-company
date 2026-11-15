@@ -128,6 +128,8 @@ button,input{font:inherit;color:inherit}input{user-select:text;-webkit-user-sele
 #ch-list{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:10px}
 .chc{border:2.5px solid var(--ink);border-radius:10px;background:#fff;padding:7px 4px;text-align:center;cursor:pointer;font-size:11px;line-height:1.35}
 .chc i{display:block;width:26px;height:26px;border-radius:50%;border:2.5px solid var(--ink);margin:0 auto 3px}
+.chc .rk{display:block;font-style:normal;font-size:10px;font-weight:900;color:#fff;background:var(--ink);border-radius:8px;padding:0 6px;margin:0 auto 2px;width:max-content}
+.ch-row .f.ch-g{flex:.8}
 .chc b{display:block;font-size:14px}.chc.on{background:var(--yellow);box-shadow:3px 3px 0 var(--ink)}.chc.lock{opacity:.5}
 .ch-row{display:flex;gap:12px}.ch-row .f{flex:1;margin-bottom:6px}
 .help{margin:0 0 12px;padding-left:18px;font-size:14px;line-height:1.95}.help b{background:#fff;border:2px solid var(--ink);border-radius:5px;padding:0 6px}

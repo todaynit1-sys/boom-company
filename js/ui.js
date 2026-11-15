@@ -13,7 +13,9 @@ const STYLES = [{ v: 'glass', n: '유리 빌딩', rank: 0 }, { v: 'brick', n: '�
 const SCREENS = ['s-title', 's-pick', 's-build', 's-chars', 's-pause', 's-bill', 's-fake'];
 export function only(id) { SCREENS.forEach(s => show(s, s === id)); }
 export function charName(id) { return S.charName[id] || CHARS[id].n; }
-const lockOf = r => rankOf(S.total) >= r ? null : RANKS[r].n;
+// 저장이 브라우저에만 남는 게임이라 캐릭터·소품·건물은 처음부터 모두 연다(직급은 칭호로만 쓴다)
+const lockOf = () => null;
+const genderOf = id => (S.gender && S.gender[id]) || CHARS[id].g || 'm';
 
 function chips(box, items, isOn, onClick) {
   box.textContent = '';
@@ -66,11 +68,13 @@ function fillChars() {
   for (const id of Object.keys(CHARS)) {
     const c = CHARS[id], lock = lockOf(c.rank), card = el('div', 'chc' + (S.char === id ? ' on' : '') + (lock ? ' lock' : ''));
     const dot = el('i'); dot.style.background = c.suit; card.appendChild(dot);
+    card.appendChild(el('em', 'rk', c.rankName + ' · ' + (genderOf(id) === 'f' ? '여' : '남')));
     card.appendChild(el('b', '', charName(id))); card.appendChild(el('span', '', lock ? lock + '부터' : c.desc)); card.appendChild(el('div', 'hint', '필살기 ' + c.sp.name));
     card.onclick = () => { if (lock) return toast(lock + ' 직급부터 쓸 수 있어요'); S.char = id; save(); sfx('up'); fillChars(); act.preview(true); };
     list.appendChild(card);
   }
   $('ch-name').value = charName(S.char);
+  chips($('ch-g'), [{ v: 'm', n: '남자' }, { v: 'f', n: '여자' }], v => genderOf(S.char) === v, v => { S.gender = S.gender || {}; S.gender[S.char] = v; save(); fillChars(); act.preview(true); });
   chips($('ch-acc'), ACCS.map(a => ({ v: a.id, n: a.n, lock: lockOf(a.rank) })), v => S.acc === v, v => { S.acc = v; save(); fillChars(); act.preview(true); });
 }
 export function showChars() { only('s-chars'); fillChars(); act.preview(true); }
