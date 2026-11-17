@@ -94,7 +94,7 @@ export function attack(c, r, dmg, imp, opt = {}) {
     const k = 1 - d / r * .5;
     if (opt.radial) { const bp = p.body.position, dx = bp.x - c.x, dz = bp.z - c.z, l = Math.hypot(dx, dz) || 1; shove(p, dx / l * imp.x, imp.y, dz / l * imp.x); } else shove(p, imp.x, imp.y, imp.z);
     const pt = { x, y, z }; out.push(p);
-    if (out.length === 1) fx.bitsAt(pt, opt.heavy ? 14 : 7, MATS[p.mat].bit, opt.heavy ? 4 : 2.5);
+    if (out.length === 1) { fx.bitsAt(pt, opt.heavy ? 16 : 8, MATS[p.mat].bit, opt.heavy ? 4 : 2.5); fx.burst(pt, opt.heavy ? .45 : .28, false); }
     damage(p, dmg * k, pt, opt.heavy, true);
   }
   return out;
@@ -124,7 +124,8 @@ export function breakProp(p) {
   if (gain > 0) fx.text({ x: pos.x, y: pos.y + .35, z: pos.z }, '+' + won(gain), 'money');
   sfx(m.snd, big ? 1 : .7); if (p.size[0] * p.size[1] * p.size[2] > .3) sfx('boom', .6);
   G.shake = Math.max(G.shake, big ? .22 : .08); if (big) G.hitstop = Math.max(G.hitstop, 60); buzz(30);
-  fx.bitsAt(bp, big ? 26 : 12, m.bit, 4.5, 3);
+  fx.bitsAt(bp, big ? 44 : 20, m.bit, big ? 5.5 : 4.5, 3.4); fx.burst(bp, big ? 1.25 : .6);
+  if (big) fx.cloud(bp, 5, '#d8d0bf', 1, .5);
   frags(p); spill(p);
   G.onBreak && G.onBreak(p);
 }

@@ -11,13 +11,15 @@ const dummy = new THREE.Object3D(), col = new THREE.Color(), zero = new THREE.Ma
 const clouds = [], stains = []; let ci = 0, sti = 0;
 const texts = []; let ti = 0;
 const v3 = new THREE.Vector3();
+// 부서지는 순간: 번쩍이는 섬광과 바닥으로 퍼지는 충격파 고리
+const flashes = [], rings = []; let fli = 0, rni = 0;
 
 export function initFx() {
   const s = X.scene, g = new THREE.BufferGeometry();
   ND = G.mobile ? 400 : 800;
   bPos = new Float32Array(NB * 3).fill(-999); bCol = new Float32Array(NB * 3); bVel = new Float32Array(NB * 3); bLife = new Float32Array(NB);
   g.setAttribute('position', new THREE.BufferAttribute(bPos, 3)); g.setAttribute('color', new THREE.BufferAttribute(bCol, 3));
-  bits = new THREE.Points(g, new THREE.PointsMaterial({ size: .075, vertexColors: true, sizeAttenuation: true })); bits.frustumCulled = false; s.add(bits);
+  bits = new THREE.Points(g, new THREE.PointsMaterial({ size: .105, vertexColors: true, sizeAttenuation: true })); bits.frustumCulled = false; s.add(bits);
   sheets = new THREE.InstancedMesh(new THREE.PlaneGeometry(.21, .297), new THREE.MeshStandardMaterial({ color: '#ffffff', side: THREE.DoubleSide, roughness: .9 }), NS);
   sheets.frustumCulled = false; sheets.receiveShadow = true;
   for (let i = 0; i < NS; i++) { sheets.setMatrixAt(i, zero); sheets.setColorAt(i, col.set('#fff')); sd.push({ life: 0 }); }
@@ -29,13 +31,16 @@ export function initFx() {
   for (let i = 0; i < NC; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex('soft'), transparent: true, depthWrite: false, opacity: 0 })); sp.visible = false; s.add(sp); clouds.push({ sp, life: 0 }); }
   const cg = new THREE.CircleGeometry(1, 20);
   for (let i = 0; i < NST; i++) { const m = new THREE.Mesh(cg, new THREE.MeshBasicMaterial({ transparent: true, opacity: .5, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.visible = false; s.add(m); stains.push(m); }
+  for (let i = 0; i < 10; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex('soft'), color: '#fff0b8', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 })); sp.visible = false; s.add(sp); flashes.push({ sp, life: 0 }); }
+  const rg = new THREE.RingGeometry(.84, 1, 40);
+  for (let i = 0; i < 8; i++) { const m = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide })); m.rotation.x = -Math.PI / 2; m.visible = false; s.add(m); rings.push({ m, life: 0 }); }
   const box = document.getElementById('fxt');
   for (let i = 0; i < NT; i++) { const e = document.createElement('span'); box.appendChild(e); texts.push({ e, life: 0, p: new THREE.Vector3() }); }
 }
 // 장면이 바뀌어도 남길 것(종이·얼룩·잔해)은 두고, 날아다니는 것만 지운다
 export function clearFxSoft() {
   bPos.fill(-999); bLife.fill(0); bits.geometry.attributes.position.needsUpdate = true;
-  clouds.forEach(c => { c.life = 0; c.sp.visible = false; }); texts.forEach(t => { t.life = 0; t.e.style.display = 'none'; });
+  clouds.forEach(c => { c.life = 0; c.sp.visible = false; }); flashes.forEach(f => { f.life = 0; f.sp.visible = false; }); rings.forEach(r => { r.life = 0; r.m.visible = false; }); texts.forEach(t => { t.life = 0; t.e.style.display = 'none'; });
 }
 export function clearFx() {
   clearFxSoft();
@@ -52,6 +57,10 @@ export function bitsAt(p, n, color, speed = 3, up = 2) {
     bVel[k * 3] = Math.cos(a) * s; bVel[k * 3 + 1] = rand(.2, 1) * up + rand(-.5, .5) * speed * .4; bVel[k * 3 + 2] = Math.sin(a) * s;
     const j = rand(.8, 1.1); bCol[k * 3] = col.r * j; bCol[k * 3 + 1] = col.g * j; bCol[k * 3 + 2] = col.b * j; bLife[k] = rand(30, 70);
   }
+}
+export function burst(p, k = 1, ring = true) {
+  const f = flashes[fli = (fli + 1) % flashes.length]; f.life = f.max = 9; f.k = k; f.sp.visible = true; f.sp.position.set(p.x, p.y, p.z);
+  if (ring) { const r = rings[rni = (rni + 1) % rings.length]; r.life = r.max = 24; r.k = k; r.m.visible = true; r.m.position.set(p.x, .035, p.z); }
 }
 export const sparks = (p, n) => { bitsAt(p, n >> 1, '#ffd84d', 5, 3); bitsAt(p, n >> 1, '#ff8a1f', 4, 2); };
 // 한 방향으로 뿜는 알갱이(소화기 분말)와 위에서 떨어지는 물방울(스프링클러)
@@ -151,6 +160,8 @@ export function update(dt) {
     if (d.rest) d.done = true;
   }
   if (ch) sheets.instanceMatrix.needsUpdate = true;
+  for (const f of flashes) { if (f.life <= 0) continue; f.life--; const t = 1 - f.life / f.max, sc = f.k * (.7 + t * 2.8); f.sp.scale.set(sc, sc, 1); f.sp.material.opacity = (1 - t) * .95; if (f.life <= 0) f.sp.visible = false; }
+  for (const r of rings) { if (r.life <= 0) continue; r.life--; const t = 1 - r.life / r.max, sc = r.k * (.4 + (1 - (1 - t) * (1 - t)) * 3.4); r.m.scale.set(sc, sc, 1); r.m.material.opacity = (1 - t) * .6; if (r.life <= 0) r.m.visible = false; }
   for (const c of clouds) {
     if (c.life <= 0) continue; c.life--; const sp = c.sp, k = c.life / c.max;
     sp.position.x += c.vx; sp.position.y += c.vy; sp.position.z += c.vz; c.size += c.grow; sp.scale.set(c.size, c.size, 1); sp.material.opacity = Math.min(.55, k * 1.2) * (1 - Math.max(0, k - .85) * 5);
