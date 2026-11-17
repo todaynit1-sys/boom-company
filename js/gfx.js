@@ -228,7 +228,7 @@ export function initGfx(canvas) {
 // 휴대폰 세로: 장면을 위로 22% 올려 그려서 캐릭터가 아래쪽 조작 버튼에 가리지 않게 한다(찌그러지지 않게 aspect도 맞춘다)
 export function resizeGfx(w, h) {
   X.renderer.setSize(w, h, false); const cam = X.camera, phone = G.mobile || Math.min(w, h) < 520, portrait = h > w;
-  if (phone && portrait) { const k = 1.22; cam.fov = 72; cam.aspect = w / (h * k); cam.setViewOffset(w, h * k, 0, h * (k - 1), w, h); }
+  if (phone && portrait) { const k = 1.22; cam.fov = 90; cam.aspect = w / (h * k); cam.setViewOffset(w, h * k, 0, h * (k - 1), w, h); }
   else { cam.fov = phone ? 62 : 58; cam.aspect = w / h; cam.clearViewOffset(); }
   cam.updateProjectionMatrix();
 }

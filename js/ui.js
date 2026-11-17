@@ -36,6 +36,7 @@ export function showTitle() {
   $('t-rank').textContent = RANKS[r].n;
   $('t-rankbar').style.width = (nx ? Math.min(100, (S.total - RANKS[r].at) / (nx.at - RANKS[r].at) * 100) : 100) + '%';
   $('t-total').textContent = '누적 피해액 ' + won(S.total);
+  $('t-rush').textContent = S.rushBest ? '최고 ' + won(S.rushBest) : '60초 기록 도전';
   $('o-snd').checked = !S.mute; $('o-bgm').checked = S.bgm !== false; $('o-hap').checked = S.haptic; $('o-calm').checked = S.calm; $('o-skip').checked = !!S.skipArrive;
   show('o-skipw', S.runs > 0);
 }
@@ -204,6 +205,7 @@ export function bill(d) {
   const sum = el('div', 'sum'); sum.appendChild(el('span', '', '합계')); sum.appendChild(el('b', '', won(d.total))); b.appendChild(sum);
   const ex = el('div', 'ex'); ex.appendChild(el('span', '', '최고 연타 ' + d.maxCombo)); ex.appendChild(el('span', '', '걸린 시간 ' + Math.floor(d.sec / 60) + '분 ' + (d.sec % 60) + '초')); b.appendChild(ex);
   if (d.stressMax != null) { const sx = el('div', 'ex'); sx.appendChild(el('span', '', '하루 스트레스 최고 ' + Math.round(d.stressMax) + '%')); sx.appendChild(el('span', '', '퇴근할 때 ' + Math.round(d.stressEnd) + '%')); b.appendChild(sx); }
+  if (d.rush) b.appendChild(el('div', 'promo', d.rush.isNew ? '1분 난동 새 기록! ' + won(d.total) + ' (' + d.rush.floor + ')' : '1분 난동 ' + won(d.total) + ' · 최고 기록 ' + won(d.rush.best)));
   if (d.goals) { const gx = el('div', 'ex'); gx.appendChild(el('span', '', '도전과제 ' + d.goals.got + ' / ' + d.goals.total)); gx.appendChild(el('span', '', '다녀간 층 ' + d.goals.floors + '곳')); b.appendChild(gx); }
   const seal = el('div', 'seal' + (rankOf(S.total) >= 7 ? ' gold' : ''), '전액'); seal.appendChild(document.createElement('br')); seal.appendChild(document.createTextNode('회사 부담')); b.appendChild(seal);
   setTimeout(() => sfx('stamp'), 1650);
@@ -216,7 +218,8 @@ export function bill(d) {
   const btns = el('div', 'p-btns');
   const mk = (t, cls, fn) => { const x = el('button', 'btn ' + cls, t); x.onclick = fn; btns.appendChild(x); };
   mk('한 판 더', 'main', () => act.again());
-  mk('결과 복사', '', () => { const s = `[회사 뿌시기] ${d.company} 비품 파손 청구서 — 합계 ${won(d.total)}, 최고 연타 ${d.maxCombo}`; (navigator.clipboard ? navigator.clipboard.writeText(s) : Promise.reject()).then(() => toast('복사했어요'), () => toast('복사하지 못했어요')); });
+  // 자랑하기: 휴대폰은 공유 창(카톡 등), 안 되면 글을 복사한다
+  mk('자랑하기', '', () => { const s = `[회사 뿌시기] ${d.company} 비품 파손 청구서 — 합계 ${won(d.total)}` + (d.rush ? ' (1분 난동)' : '') + `, 최고 연타 ${d.maxCombo}. 너도 부숴 봐!`, url = 'https://boom-company.vercel.app/'; if (navigator.share) navigator.share({ title: '회사 뿌시기', text: s, url }).catch(() => { }); else (navigator.clipboard ? navigator.clipboard.writeText(s + ' ' + url) : Promise.reject()).then(() => toast('복사했어요. 붙여 넣어 자랑하세요'), () => toast('복사하지 못했어요')); });
   mk('처음으로', '', () => act.title());
   b.appendChild(btns);
   if (d.promo) setTimeout(() => sfx('up'), 2000);
@@ -231,7 +234,7 @@ export function fake(on) {
 }
 
 export function init(missions, ids) {
-  $('b-course').onclick = () => act.course(); $('b-pick').onclick = () => showPick(missions, ids); $('b-free').onclick = showFloors; $('fl-back').onclick = () => only('s-title');
+  $('b-course').onclick = () => act.course(); $('b-pick').onclick = () => showPick(missions, ids); $('b-free').onclick = showFloors; $('b-rush').onclick = () => act.rush(); $('fl-back').onclick = () => only('s-title');
   $('b-build').onclick = showBuilder; $('b-chars').onclick = showChars; $('pk-back').onclick = () => only('s-title');
   $('o-snd').onchange = e => { S.mute = !e.target.checked; save(); refreshMusic(); }; $('o-bgm').onchange = e => { S.bgm = e.target.checked; save(); refreshMusic(); };
   $('o-hap').onchange = e => { S.haptic = e.target.checked; save(); }; $('o-calm').onchange = e => { S.calm = e.target.checked; G.calm = S.calm; save(); };

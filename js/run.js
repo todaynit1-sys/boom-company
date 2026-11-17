@@ -41,7 +41,7 @@ export function preview(close) {
 function reset() {
   clearTimers(); hush(); ui.keysHint(false); Object.assign(G, { money: 0, counts: {}, nags: 0, maxCombo: 0, combo: 0, rage: 0, stress: 30, stressMax: 30, restocked: {}, clock: 0, toys: false, emit: null, onAlarm: null });
   R.t0 = Date.now(); R.co = copy(S.company); R.built = false; P.cheer = false; R.got = null; R.panel = false; resetToys(); ui.elev(null); ui.alarm(false); ui.over('');
-  R.cfloor = 'office'; R.csnap = {}; R.cwet = {};
+  R.cfloor = 'office'; R.csnap = {}; R.cwet = {}; R.rush = null; R.isRush = false;
   // 휴대폰을 세로로 들고 있으면 한 번만 알려 준다
   if (G.mobile && innerHeight > innerWidth && !R.rotTold) { R.rotTold = true; after(2600, () => ui.toast('휴대폰을 가로로 돌리면 더 넓게 보여요')); }
 }
@@ -232,7 +232,9 @@ function enterFloor(id) {
 }
 function freeTick(dt) {
   updatePlayer(dt); tickToys(dt);
-  if (G.tick % 6 === 0) { ui.hud({ title: R.label, sub: R.co.name, money: G.money, stress: null, combo: G.combo, rage: G.rage, time: '시간 제한 없음', clock: '', weapon: weaponLabel() }); promptTick(); }
+  if (G.tick % 6 === 0) { ui.hud({ title: R.label, sub: R.co.name, money: G.money, stress: null, combo: G.combo, rage: G.rage, time: R.rush != null ? '남은 시간 ' + Math.ceil(R.rush / 60) + '초' + (R.rush < 900 ? ' · 막판 2배!' : '') : '시간 제한 없음', clock: '', weapon: weaponLabel() }); promptTick(); }
+  // 1분 난동: 60초 동안 얼마나 부수나. 마지막 15초는 피해액 2배
+  if (R.rush != null && !R.moving) { R.rush--; if (R.rush === 900) { G.mult = 2; ui.big('막판 15초!', '피해액 2배'); later(70, () => ui.over('')); sfx('special'); } if (R.rush <= 0) { R.rush = null; sfx('ding'); return bill(); } }
   // 엘리베이터: 다가가면 문이 열리고, 안에 들어서면 층 버튼(도착한 칸에서 한 번 나갔다 와야 뜬다)
   if (!R.moving && G.elev && P.active) {
     const pp = P.body.position, inCab = Math.abs(pp.x - G.elev.x) < .75 && pp.z > 9.3, near = Math.hypot(pp.x - G.elev.x, pp.z - 9.1) < 2.6;
@@ -285,10 +287,16 @@ export function bill() {
   S.total += total; if (R.last === 'course') S.best = Math.max(S.best, total); S.runs++;
   for (const k in G.counts) S.counts[k] = (S.counts[k] || 0) + G.counts[k].n;
   save();
+  const rush = was === 'free' && R.isRush ? { best: Math.max(S.rushBest || 0, total), isNew: total > (S.rushBest || 0), floor: floorName(R.floor) } : null; R.wasRush = !!rush; if (rush) { S.rushBest = rush.best; save(); }
   const r1 = rankOf(S.total), goals = was === 'free' && R.got ? { got: R.got.size, total: FLOOR_IDS.reduce((a, id) => a + FLOORS[id].goals.length, 0), floors: R.visited.size } : null;
   if (P.ride) P.ride = null; resetToys(); ui.elev(null); R.panel = false;
-  ui.bill({ company: R.co.name, who: ui.charName(S.char), counts: G.counts, nags: G.nags, nagSum, total, maxCombo: G.maxCombo, sec: Math.round((Date.now() - R.t0) / 1000), promo: r1 > r0 ? RANKS[r1] : null, stressMax: was === 'free' ? null : G.stressMax, stressEnd: G.stress, goals });
+  ui.bill({ company: R.co.name, who: ui.charName(S.char), counts: G.counts, nags: G.nags, nagSum, total, maxCombo: G.maxCombo, sec: Math.round((Date.now() - R.t0) / 1000), promo: r1 > r0 ? RANKS[r1] : null, stressMax: was === 'free' ? null : G.stressMax, stressEnd: G.stress, goals, rush });
   music('win');
 }
-export function again() { if (R.last === 'free') startFree(R.startFloor); else if (R.last === 'course') startCourse(); else startSingle(R.list[0]); }
+// 1분 난동: 아무 층에서나 60초. 기기별 최고 기록을 남긴다
+export function startRush(floor) {
+  startFree(floor || pick(FLOOR_IDS)); R.rush = 60 * 60; R.isRush = true;
+  ui.big('1분 난동', '60초 동안 최대한 많이! 최고 기록 ' + Math.round(S.rushBest || 0).toLocaleString('ko-KR') + '원'); later(120, () => ui.over(''));
+}
+export function again() { if (R.last === 'free') (R.wasRush ? startRush() : startFree(R.startFloor)); else if (R.last === 'course') startCourse(); else startSingle(R.list[0]); }
 void sit; void standUp;

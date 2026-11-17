@@ -5,7 +5,7 @@ import { tick } from './engine.js';
 import * as fx from './fx.js';
 import { I, P, CAM, renderPlayer } from './player.js';
 import { MISSIONS, MISSION_IDS, MS, skipStep, canSkip } from './missions.js';
-import { R, title, preview, startCourse, startSingle, startFree, goFloor, bill, again, fmtClock } from './run.js';
+import { R, title, preview, startCourse, startSingle, startFree, startRush, goFloor, bill, again, fmtClock } from './run.js';
 import { tickWorld } from './world.js';
 import { FLOOR_IDS } from './floors.js';
 import { TOY } from './toys.js';
@@ -20,7 +20,7 @@ let W = 1, H = 1;
 function resize() {
   W = innerWidth; H = innerHeight; resizeGfx(W, H);
   const phone = G.mobile || Math.min(W, H) < 520, portrait = H > W;
-  CAM.dist = phone ? (portrait ? 3.4 : 3.5) : 4.3;
+  CAM.dist = phone ? (portrait ? 3.2 : 3.5) : 4.3;
   document.body.classList.toggle('phone-p', phone && portrait); document.body.classList.toggle('phone-l', phone && !portrait);
 }
 addEventListener('resize', resize);
@@ -121,7 +121,7 @@ function frame(t) {
 }
 
 Object.assign(ui.act, {
-  course: startCourse, single: startSingle, free: startFree, goFloor, preview, title, again, clock: fmtClock,
+  course: startCourse, single: startSingle, free: startFree, rush: startRush, goFloor, preview, title, again, clock: fmtClock,
   pause: () => setPause(!paused),
   canSkip: () => R.mode === 'run' && canSkip(), skip: () => R.mode === 'run' && skipStep(),
   quit: () => { paused = false; G.userPause = false; ui.pause(false); duckMusic(1); bill(); },
@@ -141,7 +141,7 @@ async function boot() {
       G, R, I, P, S, MS, CAM, X, music: musicState,
       peek: () => ({ mode: R.mode, day: R.i, tick: G.tick, paused: G.paused, mission: MS.m && MS.m.n, step: MS.step ? MS.i + ':' + MS.step.t : MS.phase, clock: fmtClock(G.clock || 0), money: Math.round(G.money), stress: Math.round(G.stress || 0), props: G.props.length, debris: fx.debrisCount(), restocked: Object.values(G.restocked || {}).reduce((a, b) => a + b, 0), seated: !!P.seated, expr: P.expr, cam: CAM.mode, x: P.active ? +P.body.position.x.toFixed(1) : null, z: P.active ? +P.body.position.z.toFixed(1) : null, weapon: P.weapon, calls: X.renderer.info.render.calls, floor: R.mode === 'free' ? R.floor : null, ride: P.ride ? P.ride.kind : null, fuel: P.fuel ? Math.round(P.fuel) : 0, alarm: TOY.alarm, wet: TOY.wet, goals: R.got ? [...R.got] : null }),
       step: n => { for (let i = 0; i < n; i++) step(); draw(n / 60); return window.__boom.peek(); },
-      single: startSingle, course: startCourse, free: startFree, go: goFloor, toy: TOY, bill, title,
+      single: startSingle, course: startCourse, free: startFree, rush: startRush, go: goFloor, toy: TOY, bill, title,
       set auto(v) { G.auto = v; if (!v) { I.mx = I.mz = 0; I.a = I.b = I.e = I.jump = I.c = false; } }, get auto() { return G.auto; },
     };
   }
