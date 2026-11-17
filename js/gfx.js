@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { G } from './state.js';
 export { THREE };
 export const X = { renderer: null, scene: null, camera: null, sun: null, hemi: null, level: null, lamps: [] };
@@ -15,7 +19,7 @@ export function canvasTex(w, h, fn, rep) {
 }
 export function speckle(c, w, h, n, a, dark = true) { for (let i = 0; i < n; i++) { c.fillStyle = `rgba(${dark ? '0,0,0' : '255,255,255'},${Math.random() * a})`; c.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 2, 1 + Math.random() * 2); } }
 const TEX = {
-  carpet: () => canvasTex(256, 256, (c, w, h) => { c.fillStyle = '#566070'; c.fillRect(0, 0, w, h); speckle(c, w, h, 5000, .2); speckle(c, w, h, 2500, .06, false); c.strokeStyle = 'rgba(0,0,0,.14)'; c.lineWidth = 2; c.strokeRect(0, 0, w, h); }, [28, 18]),
+  carpet: () => canvasTex(256, 256, (c, w, h) => { c.fillStyle = '#4f6485'; c.fillRect(0, 0, w, h); speckle(c, w, h, 5000, .2); speckle(c, w, h, 2500, .06, false); c.strokeStyle = 'rgba(0,0,0,.14)'; c.lineWidth = 2; c.strokeRect(0, 0, w, h); }, [28, 18]),
   wood: () => canvasTex(256, 256, (c, w, h) => { c.fillStyle = '#c8a070'; c.fillRect(0, 0, w, h); for (let i = 0; i < 90; i++) { c.strokeStyle = `rgba(90,55,20,${Math.random() * .16})`; c.lineWidth = 1 + Math.random() * 3; const y = Math.random() * h; c.beginPath(); c.moveTo(0, y); c.bezierCurveTo(w * .3, y + Math.random() * 8 - 4, w * .6, y + Math.random() * 8 - 4, w, y + Math.random() * 6 - 3); c.stroke(); } }),
   woodDark: () => canvasTex(256, 256, (c, w, h) => { c.fillStyle = '#5b3b24'; c.fillRect(0, 0, w, h); for (let i = 0; i < 90; i++) { c.strokeStyle = `rgba(20,8,0,${Math.random() * .25})`; c.lineWidth = 1 + Math.random() * 3; const y = Math.random() * h; c.beginPath(); c.moveTo(0, y); c.bezierCurveTo(w * .3, y + Math.random() * 8 - 4, w * .6, y + Math.random() * 8 - 4, w, y + Math.random() * 6 - 3); c.stroke(); } }),
   ceiling: () => canvasTex(256, 256, (c, w, h) => { c.fillStyle = '#ecebe6'; c.fillRect(0, 0, w, h); speckle(c, w, h, 2500, .1); c.strokeStyle = '#c9c8c2'; c.lineWidth = 3; c.strokeRect(0, 0, w, h); }, [23, 15]),
@@ -41,7 +45,7 @@ const TEX = {
 export function tex(k) { return texs[k] || (texs[k] = TEX[k]()); }
 
 const MATDEF = {
-  carpet: { map: 'carpet', roughness: 1 }, wall: { color: '#d6d0c2', roughness: .95 }, wallDark: { color: '#5f7286', roughness: .85 }, ceiling: { map: 'ceiling', roughness: 1 },
+  carpet: { map: 'carpet', roughness: 1 }, wall: { color: '#e4d9c2', roughness: .95 }, wallDark: { color: '#4f7396', roughness: .85 }, ceiling: { map: 'ceiling', roughness: 1 },
   wood: { map: 'wood', roughness: .55 }, woodDark: { map: 'woodDark', roughness: .45 }, lam: { color: '#f1efe9', roughness: .6 }, lamGray: { color: '#8f979f', roughness: .55 },
   plasticDark: { color: '#24262b', roughness: .45 }, plasticGray: { color: '#8b9097', roughness: .5 }, plasticLight: { color: '#e4e1d8', roughness: .5 }, plasticBlue: { color: '#2f5fb3', roughness: .5 },
   metal: { color: '#b4bac0', roughness: .32, metalness: .85 }, metalDark: { color: '#4b5158', roughness: .4, metalness: .8 }, chrome: { color: '#e6e9ec', roughness: .12, metalness: 1 }, gold: { color: '#d9a531', roughness: .25, metalness: 1 },
@@ -224,12 +228,20 @@ export function initGfx(canvas) {
   s.add(l1, l2); X.lamps = [l1, l2];
   X.sky = new THREE.Mesh(new THREE.PlaneGeometry(150, 60), new THREE.MeshBasicMaterial({ map: skyTex('day'), fog: false })); X.sky.position.set(0, 14, -46); s.add(X.sky);
   setTime('day');
+  // 조명 패널·모니터·불빛이 은은하게 번지게(PC만). 실패하면 그냥 기본 그리기로
+  if (!G.mobile) try {
+    const rt = new THREE.WebGLRenderTarget(4, 4, { samples: 4, type: THREE.HalfFloatType });
+    const c = X.composer = new EffectComposer(r, rt); c.addPass(new RenderPass(s, X.camera));
+    X.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), .32, .55, 1.15); c.addPass(X.bloom); c.addPass(new OutputPass());
+  } catch (e) { X.composer = null; }
 }
+export function render() { if (X.composer) X.composer.render(); else X.renderer.render(X.scene, X.camera); }
 // 휴대폰 세로: 장면을 위로 22% 올려 그려서 캐릭터가 아래쪽 조작 버튼에 가리지 않게 한다(찌그러지지 않게 aspect도 맞춘다)
 export function resizeGfx(w, h) {
   X.renderer.setSize(w, h, false); const cam = X.camera, phone = G.mobile || Math.min(w, h) < 520, portrait = h > w;
   if (phone && portrait) { const k = 1.22; cam.fov = 90; cam.aspect = w / (h * k); cam.setViewOffset(w, h * k, 0, h * (k - 1), w, h); }
   else { cam.fov = phone ? 62 : 58; cam.aspect = w / h; cam.clearViewOffset(); }
   cam.updateProjectionMatrix();
+  if (X.composer) { X.composer.setPixelRatio(X.renderer.getPixelRatio()); X.composer.setSize(w, h); }
 }
 export function newLevel() { if (X.level) X.scene.remove(X.level); X.level = new THREE.Group(); X.scene.add(X.level); return X.level; }
