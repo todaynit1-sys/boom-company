@@ -190,9 +190,9 @@ export function buildRig(id, acc, g) {
   const hairM = new THREE.MeshStandardMaterial({ color: ch.hairCol, roughness: .55, side: THREE.DoubleSide }), sleeve = colorMat(ch.suit, .82);
   const jacket = ch.top === 'suit' || ch.top === 'blazer', legM = ch.skirt ? colorMat(ch.legs, .5) : pants;
   // 몸 치수: 여자는 다리가 조금 짧고 어깨가 좁다
-  const thL = F ? .41 : .43, shL = F ? .405 : .42, hipX = F ? .082 : .088, shX = F ? .178 : .2, ua = F ? [.044, .037, .275] : [.051, .043, .29], fa = F ? [.038, .03, .235] : [.044, .036, .245];
+  const thL = F ? .385 : .4, shL = F ? .38 : .39, hipX = F ? .082 : .088, shX = F ? .166 : .186, ua = F ? [.039, .034, .27] : [.045, .039, .285], fa = F ? [.035, .029, .235] : [.04, .034, .245];
   // 다리
-  const hips = R.hips = grp(root, 0, R.hipY = F ? .935 : .97, 0);
+  const hips = R.hips = grp(root, 0, R.hipY = F ? .885 : .91, 0);
   if (!ch.skirt) { mesh(hips, limbGeo(F ? .132 : .138, F ? .128 : .13, .17), pants, 0, -.035, 0).scale.z = .8; mesh(hips, sphGeo(.07, 14), pants, 0, -.17, 0).scale.set(1.2, .8, .9); }
   for (const s of [-1, 1]) {
     const k = s < 0 ? 'L' : 'R', hip = grp(hips, s * hipX, -.07, 0), knee = grp(hip, 0, -thL, 0), ank = grp(knee, 0, -shL, 0);
@@ -206,7 +206,7 @@ export function buildRig(id, acc, g) {
   // 몸통
   const sp = R.spine = grp(hips, 0, 0, 0);
   mesh(sp, torsoGeo('t' + ch.top + (ch.belly ? 'b' : '') + (F ? 'f' : ''), ch.top === 'aloha' ? .98 : 1, ch.belly ? .032 : 0, F), topMat(ch)).scale.z = .74;
-  for (const s of [-1, 1]) mesh(sp, sphGeo(F ? .053 : .06, 14), sleeve, s * (F ? .162 : .186), .452, 0).scale.set(1.12, .8, 1.02);
+  for (const s of [-1, 1]) mesh(sp, sphGeo(F ? .046 : .052, 14), sleeve, s * (F ? .155 : .176), .452, 0).scale.set(1.12, .8, 1.02);
   mesh(sp, limbGeo(F ? .04 : .046, F ? .044 : .05, .13), skin, 0, .7, .002);
   if (jacket) { mesh(sp, limbGeo(F ? .052 : .058, F ? .057 : .064, .05, true), shirt, 0, .6, .004).scale.z = .92; if (ch.tie) mesh(sp, boxGeo(.034, .036, .02, .006), colorMat(ch.tie, .6), 0, .548, .058); }
   if (ch.top === 'hoodie') mesh(sp, sphGeo(.1, 16), sleeve, 0, .53, -.075).scale.set(F ? 1.2 : 1.35, .62, .75);
@@ -227,7 +227,7 @@ export function buildRig(id, acc, g) {
     R['sh' + k] = sh; R['el' + k] = el; R['hand' + k] = hd; R['fing' + k] = fg;
   }
   // 머리
-  const head = R.head = grp(sp, 0, .72, .008); if (F) head.scale.setScalar(.965);
+  const head = R.head = grp(sp, 0, .72, .008); head.scale.setScalar(F ? 1.24 : 1.27); head.position.y = .745;
   mesh(head, shell('head', 1), skin);
   R.face = new THREE.Mesh(shell('face', 1.01, null, { ps: FRONT - .95, pl: 1.9, ts: .72, tl: 2.0, w: 22, h: 20 }), new THREE.MeshStandardMaterial({ map: faceTex(ch, 'normal'), transparent: true, roughness: .6, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
   head.add(R.face);

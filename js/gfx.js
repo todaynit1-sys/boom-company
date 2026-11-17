@@ -232,7 +232,7 @@ export function initGfx(canvas) {
   if (!G.mobile) try {
     const rt = new THREE.WebGLRenderTarget(4, 4, { samples: 4, type: THREE.HalfFloatType });
     const c = X.composer = new EffectComposer(r, rt); c.addPass(new RenderPass(s, X.camera));
-    X.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), .32, .55, 1.15); c.addPass(X.bloom); c.addPass(new OutputPass());
+    X.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), .26, .55, 1.4); c.addPass(X.bloom); c.addPass(new OutputPass());
   } catch (e) { X.composer = null; }
 }
 export function render() { if (X.composer) X.composer.render(); else X.renderer.render(X.scene, X.camera); }
