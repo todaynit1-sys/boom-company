@@ -41,7 +41,7 @@ export function preview(close) {
 function reset() {
   clearTimers(); hush(); ui.keysHint(false); Object.assign(G, { money: 0, counts: {}, nags: 0, maxCombo: 0, combo: 0, rage: 0, stress: 30, stressMax: 30, restocked: {}, clock: 0, toys: false, emit: null, onAlarm: null });
   R.t0 = Date.now(); R.co = copy(S.company); R.built = false; P.cheer = false; R.got = null; R.panel = false; resetToys(); ui.elev(null); ui.alarm(false); ui.over('');
-  R.cfloor = 'office'; R.csnap = {}; R.cwet = {}; R.rush = null; R.isRush = false;
+  R.cfloor = 'office'; R.csnap = {}; R.cwet = {}; R.rush = null; R.isRush = false; R.mi = 0;
   // 휴대폰을 세로로 들고 있으면 한 번만 알려 준다
   if (G.mobile && innerHeight > innerWidth && !R.rotTold) { R.rotTold = true; after(2600, () => ui.toast('휴대폰을 가로로 돌리면 더 넓게 보여요')); }
 }
@@ -132,8 +132,11 @@ function begin(id) {
   if (R.i === 0 && id !== 'arrive' && !S.seenHelp) { ui.keysHint(true); after(12000, () => ui.keysHint(false)); }
   if (id === 'arrive' || R.i === 0) { S.seenHelp = true; save(); }
 }
+// 피해액이 큰 고비를 넘을 때마다 알려 준다
+const MILES = [1e7, 5e7, 1e8, 3e8, 5e8, 1e9, 3e9];
+function miles() { while (G.money >= MILES[R.mi || 0]) { const v = MILES[R.mi || 0]; R.mi = (R.mi || 0) + 1; ui.toast('피해액 ' + (v >= 1e8 ? v / 1e8 + '억' : v / 1e4 + '만') + ' 원 돌파!'); sfx('up'); G.flash = Math.max(G.flash, 3); } }
 function playTick(dt) {
-  updatePlayer(dt); tickToys(dt); tickMission(dt);
+  updatePlayer(dt); tickToys(dt); tickMission(dt); if (G.tick % 12 === 0) miles();
   if (MS.phase !== 'idle') G.clock += dt / 3;
   if (G.tick % 6 === 0) { const h = missionHud(); ui.hud({ title: R.label, sub: R.sub || '', money: G.money, stress: G.stress, combo: G.combo, rage: G.rage, clock: fmtClock(G.clock), time: h.left != null ? '자유 난동 ' + h.left + '초 · 피해액 2배' : '', weapon: weaponLabel() }); promptTick(); }
   if (G.tick % 30 === 0) setWallClock(G.clock);
@@ -231,7 +234,7 @@ function enterFloor(id) {
   const gr = FLOOR_GREET[id]; if (gr) after(2600, () => { if (R.mode === 'free' && R.floor === id) say(gr[0].replace('{who}', R.co.who), gr[1]); });
 }
 function freeTick(dt) {
-  updatePlayer(dt); tickToys(dt);
+  updatePlayer(dt); tickToys(dt); if (G.tick % 12 === 0) miles();
   if (G.tick % 6 === 0) { ui.hud({ title: R.label, sub: R.co.name, money: G.money, stress: null, combo: G.combo, rage: G.rage, time: R.rush != null ? '남은 시간 ' + Math.ceil(R.rush / 60) + '초' + (R.rush < 900 ? ' · 막판 2배!' : '') : '시간 제한 없음', clock: '', weapon: weaponLabel() }); promptTick(); }
   // 1분 난동: 60초 동안 얼마나 부수나. 마지막 15초는 피해액 2배
   if (R.rush != null && !R.moving) { R.rush--; if (R.rush === 900) { G.mult = 2; ui.big('막판 15초!', '피해액 2배'); later(70, () => ui.over('')); sfx('special'); } if (R.rush <= 0) { R.rush = null; sfx('ding'); return bill(); } }

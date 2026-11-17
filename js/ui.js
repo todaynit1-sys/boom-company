@@ -5,13 +5,14 @@ import { G, won } from './state.js';
 import { sfx } from './audio.js';
 import { refreshMusic } from './music.js';
 import { FLOORS, FLOOR_IDS, floorLv } from './floors.js';
+import { DEFS } from './data/props.js';
 
 export const act = {};
 const $ = id => document.getElementById(id);
 const show = (id, on) => $(id).classList.toggle('off', !on);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const STYLES = [{ v: 'glass', n: '유리 빌딩', rank: 0 }, { v: 'brick', n: '벽돌 상가', rank: 1 }, { v: 'gov', n: '관공서풍', rank: 3 }];
-const SCREENS = ['s-title', 's-pick', 's-floors', 's-build', 's-chars', 's-pause', 's-bill', 's-fake'];
+const SCREENS = ['s-title', 's-pick', 's-floors', 's-book', 's-build', 's-chars', 's-pause', 's-bill', 's-fake'];
 export function only(id) { SCREENS.forEach(s => show(s, s === id)); }
 export function charName(id) { return S.charName[id] || CHARS[id].n; }
 // 저장이 브라우저에만 남는 게임이라 캐릭터·소품·건물은 처음부터 모두 연다(직급은 칭호로만 쓴다)
@@ -92,6 +93,15 @@ export function goalToast(text, n) {
   g.classList.remove('off', 'pop'); void g.offsetWidth; g.classList.add('pop'); clearTimeout(goalT); goalT = setTimeout(() => g.classList.add('off'), 2800);
 }
 export function alarm(on) { $('alarmfx').classList.toggle('on', !!on); }
+
+// ───── 도감: 값이 있는(부술 수 있는) 물건 종류마다 지금까지 부순 개수
+function showBook() {
+  only('s-book'); const box = $('bk-list'); box.textContent = '';
+  const ids = Object.keys(DEFS).filter(k => DEFS[k].price > 0 && DEFS[k].kind !== 'frag' && DEFS[k].hp < 9000).sort((a, b) => DEFS[b].price - DEFS[a].price);
+  let got = 0;
+  for (const k of ids) { const n = (S.counts && S.counts[k]) || 0, d = DEFS[k], c = el('div', 'bk' + (n ? ' on' : '')); if (n) got++; c.appendChild(el('b', '', n ? d.n : '???')); c.appendChild(el('span', '', n ? '×' + n.toLocaleString('ko-KR') : '아직 안 부숨')); c.appendChild(el('small', '', n ? won(d.price) : '')); box.appendChild(c); }
+  $('bk-sum').textContent = got + ' / ' + ids.length + '종 · ' + Math.round(got / ids.length * 100) + '%';
+}
 
 // ───── 회사 설정
 function fillBuilder() {
@@ -235,7 +245,7 @@ export function fake(on) {
 }
 
 export function init(missions, ids) {
-  $('b-course').onclick = () => act.course(); $('b-pick').onclick = () => showPick(missions, ids); $('b-free').onclick = showFloors; $('b-rush').onclick = () => act.rush(); $('fl-back').onclick = () => only('s-title');
+  $('b-course').onclick = () => act.course(); $('b-pick').onclick = () => showPick(missions, ids); $('b-free').onclick = showFloors; $('b-rush').onclick = () => act.rush(); $('fl-back').onclick = () => only('s-title'); $('b-book').onclick = showBook; $('bk-back').onclick = () => only('s-title');
   $('b-build').onclick = showBuilder; $('b-chars').onclick = showChars; $('pk-back').onclick = () => only('s-title');
   $('o-snd').onchange = e => { S.mute = !e.target.checked; save(); refreshMusic(); }; $('o-bgm').onchange = e => { S.bgm = e.target.checked; save(); refreshMusic(); };
   $('o-hap').onchange = e => { S.haptic = e.target.checked; save(); }; $('o-calm').onchange = e => { S.calm = e.target.checked; G.calm = S.calm; save(); };

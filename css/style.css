@@ -171,6 +171,10 @@ body.phone-l #b-rush{font-size:17px;padding:4px 12px 5px}body.phone-l .logo p{di
 #obj h3{font-size:13px;margin-bottom:3px;padding-bottom:3px}#obj h3:after{content:"펼치기";font-family:"Noto Sans KR";font-weight:900;font-size:10px;opacity:.5;margin-left:6px}#obj.open h3:after{content:"접기"}
 #obj:not(.open):not(.goals) div:not(.now){display:none}#obj.goals:not(.open) div:not(.first){display:none}#obj:not(.open) p{display:none}
 #obj.open{width:min(300px,62vw)}#obj.open div,#obj.open.goals div{display:flex!important}
+#s-book{background:rgba(15,17,22,.72);align-items:center;justify-content:center;padding:12px}#s-book h2 small{font-family:"Noto Sans KR";font-weight:900;font-size:13px;color:var(--red);margin-left:8px}
+#bk-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:6px;margin-bottom:10px}
+.bk{border:2.5px solid var(--ink);border-radius:8px;background:#e7e2d6;padding:6px 8px;font-size:11px;line-height:1.35;opacity:.55}.bk.on{background:#fff;opacity:1;box-shadow:2px 2px 0 var(--ink)}
+.bk b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bk span{display:block;font-weight:900;color:var(--red)}.bk small{display:block;opacity:.6}
 #p-skip small{display:block;font-size:11px;font-weight:700;opacity:.65}
 /* 자유 난동: 층 고르기 · 엘리베이터 층 버튼 · 도전과제 · 비상벨 */
 #s-floors{background:rgba(15,17,22,.72);align-items:center;justify-content:center;padding:12px}

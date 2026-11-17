@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=30">
+<link rel="stylesheet" href="css/style.css?v=31">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
@@ -77,7 +77,7 @@
     <button class="btn main" id="b-course">출근하기 <small>출근 · 오전 · 점심 · 오후 · 야근 · 약 9분</small></button>
     <button class="btn" id="b-rush">1분 난동 <small id="t-rush">60초 기록 도전</small></button>
     <div class="t-row"><button class="btn" id="b-pick">상황 골라 하기</button><button class="btn" id="b-free">자유 난동 · 층 고르기</button></div>
-    <div class="t-row"><button class="btn" id="b-build">회사 설정</button><button class="btn" id="b-chars">캐릭터</button></div>
+    <div class="t-row"><button class="btn" id="b-build">회사 설정</button><button class="btn" id="b-chars">캐릭터</button><button class="btn" id="b-book">도감</button></div>
     <div class="rank"><b id="t-rank"></b><div class="bar"><div id="t-rankbar"></div></div><span id="t-total"></span></div>
     <div class="opts"><label><input type="checkbox" id="o-snd"> 효과음</label><label><input type="checkbox" id="o-bgm"> 배경음악</label><label><input type="checkbox" id="o-hap"> 진동</label><label><input type="checkbox" id="o-calm"> 흔들림 약하게</label><label id="o-skipw" class="off"><input type="checkbox" id="o-skip"> 출근 장면 건너뛰기</label></div>
   </div>
@@ -93,6 +93,12 @@
   <h2>어디부터 부술까?</h2><p class="hint">시작할 층을 고르세요. 엘리베이터를 타면 언제든 다른 층으로 가고, 부순 건 층마다 그대로 남아요.</p>
   <div id="fl-list"></div>
   <div class="p-btns"><button class="btn" id="fl-back">돌아가기</button></div>
+</div></section>
+
+<section id="s-book" class="scr off"><div class="panel">
+  <h2>부순 물건 도감 <small id="bk-sum"></small></h2><p class="hint">지금까지 부순 물건이에요. 이 기기에만 남아요. 층마다 처음 보는 물건을 찾아 부숴 보세요.</p>
+  <div id="bk-list"></div>
+  <div class="p-btns"><button class="btn" id="bk-back">돌아가기</button></div>
 </div></section>
 
 <section id="s-build" class="scr off"><div class="panel">
@@ -125,6 +131,6 @@
 <div id="toast" class="off"></div>
 <div id="goalt" class="off"></div>
 <div id="boot">불러오는 중…</div>
-<script type="module" src="js/main.js?v=30"></script>
+<script type="module" src="js/main.js?v=31"></script>
 </body>
 </html>
