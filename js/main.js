@@ -38,6 +38,7 @@ addEventListener('keydown', e => {
   if (faked) { setFake(false); e.preventDefault(); return; }
   if (e.code === 'Escape' || e.code === 'KeyP') return setPause(!paused);
   if (e.code === 'KeyB') return setFake(true);
+  if (e.code === 'Tab') { ui.toggleObj(); e.preventDefault(); return; }
   // 엘리베이터 층 버튼: 숫자 키 1~4
   if (ui.elevOpen() && /^Digit[1-9]$/.test(e.code)) { const id = FLOOR_IDS[+e.code.slice(5) - 1]; if (id) goFloor(id); e.preventDefault(); return; }
   keys.add(e.code); const k = BTN[e.code]; if (k) I[k] = true;

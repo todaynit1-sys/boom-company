@@ -81,7 +81,7 @@ export function goals(title, items, foot) {
   const h = el('h3'); h.appendChild(el('span', '', title)); h.appendChild(el('span', '', items.filter(i => i.done).length + ' / ' + items.length)); o.appendChild(h);
   let left = 0;
   items.forEach(it => {
-    const d = el('div', it.done ? 'done' : left++ >= 2 ? 'later' : ''); d.appendChild(el('i', '', it.done ? '✓' : ''));
+    const d = el('div', it.done ? 'done' : left++ === 0 ? 'first' : left > 2 ? 'later' : ''); d.appendChild(el('i', '', it.done ? '✓' : ''));
     const s = el('span', '', it.t); if (!it.done && it.n > 1) s.appendChild(el('em', '', ` ${it.have}/${it.n}`)); d.appendChild(s); o.appendChild(d);
   });
   if (foot) o.appendChild(el('p', '', '→ ' + foot));
@@ -127,6 +127,7 @@ function fillChars() {
 export function showChars() { only('s-chars'); fillChars(); act.preview(true); }
 
 // ───── 게임 중 표시
+export function toggleObj() { $('obj').classList.toggle('open'); }
 export function hudShow(on) { show('hud', on); show('status', on); show('pad', on && G.mobile); show('cross', on && !G.mobile); if (!on) { show('keys', false); show('obj', false); show('band', false); show('elev', false); elevOn = false; $('vig').style.opacity = 0; alarm(false); } }
 // 시계 넘김: 화면이 검게 됐다가 시각이 크게 뜬다
 export function fade(on, instant) {
@@ -247,6 +248,7 @@ export function init(missions, ids) {
   $('c-back').onclick = () => { act.preview(); only('s-title'); }; $('c-go').onclick = () => act.course();
   $('ch-name').oninput = e => { const v = e.target.value.trim(); if (v) S.charName[S.char] = v; else delete S.charName[S.char]; save(); };
   $('ch-ok').onclick = () => { act.preview(); showTitle(); };
+  $('obj').addEventListener('pointerdown', e => { toggleObj(); e.stopPropagation(); });
   $('b-pause').onclick = () => act.pause(); $('p-resume').onclick = () => act.pause(); $('p-quit').onclick = () => act.quit(); $('p-title').onclick = () => act.home();
   $('p-skip').onclick = () => { act.pause(); if (act.skip && act.skip()) toast('할 일을 하나 넘겼어요'); };
 }
