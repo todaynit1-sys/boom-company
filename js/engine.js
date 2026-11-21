@@ -113,6 +113,7 @@ export function damage(p, dmg, pt, heavy, byPlayer) {
   if (p.dead) return;
   // 맞을 때마다 단계가 바뀌는 물건(자동차 유리·문짝, 비상벨)
   if (p.def.onDamage) { p.def.onDamage(p, dmg, heavy); if (p.dead) return; }
+  if (p.hp > 0 && G.vox && G.vox.prop(p, dmg, pt)) p.hp = 0;
   if (p.hp <= 0) return breakProp(p);
   if (p.fixed && p.def.wall && p.hp / p.maxHp <= .5) release(p);
   if (dmg > 2) sfx(heavy ? MATS[p.mat].snd : 'punch', heavy ? .5 : .7);
@@ -145,7 +146,7 @@ function toDebris(p) {
 export function settleFrags() { for (const p of G.props) if (p.type === 'frag' && !p.dead) { toDebris(p); kill(p); } flush(); }
 export function flush() {
   if (!G.removeQ.length) return;
-  for (const p of G.removeQ) { PH.world.removeBody(p.body); X.level.remove(p.g); if (p.type === 'frag' && !p.counted) fragN--; }
+  for (const p of G.removeQ) { PH.world.removeBody(p.body); X.level.remove(p.g); if (p.vx) p.vx.inst.dispose(); if (p.type === 'frag' && !p.counted) fragN--; }
   G.removeQ = []; G.props = G.props.filter(p => !p.dead);
 }
 const lv = new CANNON.Vec3(), wv = new CANNON.Vec3();
@@ -210,7 +211,7 @@ export function explode(c, r, dmg, push) {
   for (const p of G.props.slice()) {
     if (p.dead || p.held) continue; const bp = p.body.position, dx = bp.x - c.x, dy = bp.y - c.y, dz = bp.z - c.z, d = Math.hypot(dx, dy, dz); if (d > r) continue;
     const k = 1 - d / r * .6, l = d || 1; shove(p, dx / l * push * k, (dy / l + .7) * push * k, dz / l * push * k);
-    if (dmg && p.hp != null) damage(p, dmg * k, bp, true);
+    if (dmg && p.hp != null) damage(p, dmg * k, c, true);
   }
   if (G.vox && dmg) G.vox.blast(c, r); if (G.people) G.people.blast(c, r, push);
   G.shake = Math.max(G.shake, .3);

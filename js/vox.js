@@ -1,6 +1,6 @@
 // 벽 부수기: 벽은 처음엔 매끈한 상자 하나다. 처음 맞는 순간 작은 칸(복셀)으로 바뀌고,
 // 맞은 자리만 뚫린다. 바닥과 이어지지 않게 된 덩어리는 통째로 떨어져 부서진다.
-import { THREE, X } from './gfx.js';
+import { THREE, X, bx } from './gfx.js';
 import { G, rand, clamp, won } from './state.js';
 import { PH, GR, CANNON, solid, chip, damage, release, addCombo } from './engine.js';
 import * as fx from './fx.js';
@@ -17,6 +17,7 @@ function avg(m) {
   if (Array.isArray(m)) m = m[0];
   if (m.userData.avg) return m.userData.avg;
   const c = new THREE.Color().copy(m.color), img = m.map && m.map.image;
+  if (img && !img.width) return c;
   if (img) try {
     const cv = document.createElement('canvas'); cv.width = cv.height = 4; const g = cv.getContext('2d'); g.drawImage(img, 0, 0, 4, 4);
     const d = g.getImageData(0, 0, 4, 4).data; let r = 0, gg = 0, b = 0; for (let i = 0; i < 64; i += 4) { r += d[i]; gg += d[i + 1]; b += d[i + 2]; }
@@ -48,7 +49,11 @@ function voxelize(W) {
   inst.castShadow = !G.mobile; inst.receiveShadow = true; inst.frustumCulled = false; X.level.add(inst); W.mesh.visible = false;
   const ci = G.camBlock.indexOf(W.mesh); if (ci >= 0) G.camBlock[ci] = inst;
   // 바깥벽이 뚫려도 사람은 건물 밖으로 못 나간다(물건은 나간다)
-  if (Math.abs(W.x) > 13.5 || W.z < -8.6) solid(W.x, W.y, W.z, W.w, W.h, W.d, null, { group: GR.PWALL, mask: GR.PLAYER });
+  if (Math.abs(W.x) > 13.5 || W.z < -8.6) {
+    solid(W.x, W.y, W.z, W.w, W.h, W.d, null, { group: GR.PWALL, mask: GR.PLAYER });
+    // 지하층은 벽 뒤가 흙이다
+    if (G.scene === 'parking' || G.scene === 'party') { const sx = Math.abs(W.x) > 13.5 ? Math.sign(W.x) * .3 : 0; bx(X.level, W.w, W.h, W.d, chipMat('#3a332d'), W.x + sx, W.y, W.z - (sx ? 0 : .3)).castShadow = false; }
+  }
 }
 
 // 남은 칸을 큰 직사각형으로 묶어 충돌 상자를 다시 만든다
@@ -205,7 +210,7 @@ function tick() {
     if (c.hit || c.age > 360 || c.body.position.y < -6) { shatter(c); chunks.splice(i, 1); }
   }
 }
-function reset() { for (const W of walls) if (W.inst) W.inst.dispose(); for (const c of chunks) c.inst.dispose(); walls.length = 0; chunks.length = 0; bumps.length = 0; }
+function reset() { for (const p of G.props) if (p.vx) p.vx.inst.dispose(); for (const W of walls) if (W.inst) W.inst.dispose(); for (const c of chunks) c.inst.dispose(); walls.length = 0; chunks.length = 0; bumps.length = 0; }
 // 층 기억: 뚫린 자리만 적는다(떨어지는 중인 덩어리는 이미 없어진 것으로 친다)
 function snap() { return walls.filter(W => W.cells).map(W => [W.i, Array.from(W.cells).join('')]); }
 function restore(list) {
@@ -215,4 +220,71 @@ function restore(list) {
     W.inst.instanceMatrix.needsUpdate = true; rebuild(W);
   }
 }
-G.vox = { reg, hit, blast, bump, tick, reset, snap, restore, walls, chunks };
+
+// ───── 가구도 칸으로: 처음 맞을 때 그 물건의 모양·색을 칸으로 옮겨 그리고, 맞은 자리부터 파먹는다.
+// 충돌 상자와 체력은 그대로 두고 그림만 바뀐다. 칸이 30% 아래로 남으면 완전히 부서진다.
+const im = new THREE.Matrix4(), mm = new THREE.Matrix4(), bb = new THREE.Box3(), qc = new CANNON.Quaternion();
+function shown(o, root) { for (let a = o; a && a !== root; a = a.parent) if (!a.visible) return false; return true; }
+function pvox(p) {
+  if (p.vx !== undefined) return p.vx;
+  p.vx = null;
+  const [w, h, d] = p.size, vol = w * h * d, u = p.g.userData;
+  if (p.kind !== 'obj' || p.hp == null || p.maxHp >= 9000 || vol < .02 || p.def.fixedOnly || p.def.onDamage || p.def.onRestore || u.spin || u.hh || u.screen || u.lid) return null;
+  const cs = Math.max(.06, Math.cbrt(vol / (G.mobile ? 700 : 1800))), nx = Math.max(1, Math.round(w / cs)), ny = Math.max(1, Math.round(h / cs)), nz = Math.max(1, Math.round(d / cs));
+  const cx = w / nx, cy = h / ny, cz = d / nz, N = nx * ny * nz, colr = new Int32Array(N).fill(-1);
+  p.g.updateMatrixWorld(true); im.copy(p.g.matrixWorld).invert();
+  p.g.traverse(o => {
+    if (!o.isMesh || o.isInstancedMesh || !o.geometry || !shown(o, p.g)) return;
+    const mat = Array.isArray(o.material) ? o.material[0] : o.material; if (!mat || !mat.color || mat.transparent) return;
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    bb.copy(o.geometry.boundingBox).applyMatrix4(mm.multiplyMatrices(im, o.matrixWorld));
+    const hex = avg(mat).getHex(), t = o.geometry.type || '', up = Math.abs(o.rotation.x) < .2 && Math.abs(o.rotation.z) < .2;
+    const round = t.includes('Sphere') ? 2 : (t.includes('Cylinder') || t.includes('Cone')) && up ? 1 : 0;
+    const i0 = clamp(Math.floor((bb.min.x + w / 2) / cx), 0, nx - 1), i1 = clamp(Math.ceil((bb.max.x + w / 2) / cx) - 1, i0, nx - 1);
+    const j0 = clamp(Math.floor((bb.min.y + h / 2) / cy), 0, ny - 1), j1 = clamp(Math.ceil((bb.max.y + h / 2) / cy) - 1, j0, ny - 1);
+    const k0 = clamp(Math.floor((bb.min.z + d / 2) / cz), 0, nz - 1), k1 = clamp(Math.ceil((bb.max.z + d / 2) / cz) - 1, k0, nz - 1);
+    const mx = (bb.min.x + bb.max.x) / 2, my = (bb.min.y + bb.max.y) / 2, mz = (bb.min.z + bb.max.z) / 2;
+    const rx = Math.max((bb.max.x - bb.min.x) / 2, cx * .6), ry = Math.max((bb.max.y - bb.min.y) / 2, cy * .6), rz = Math.max((bb.max.z - bb.min.z) / 2, cz * .6);
+    for (let j = j0; j <= j1; j++) for (let k = k0; k <= k1; k++) for (let i = i0; i <= i1; i++) {
+      if (round) { const ex = (-w / 2 + (i + .5) * cx - mx) / rx, ey = (-h / 2 + (j + .5) * cy - my) / ry, ez = (-d / 2 + (k + .5) * cz - mz) / rz; if (ex * ex + ez * ez + (round === 2 ? ey * ey : 0) > 1.2) continue; }
+      colr[(j * nz + k) * nx + i] = hex;
+    }
+  });
+  let n = 0; for (let k = 0; k < N; k++) if (colr[k] >= 0) n++;
+  if (n < 4) return null;
+  const inst = new THREE.InstancedMesh(geo, vmat, n), idx = new Int32Array(N).fill(-1); let m = 0;
+  for (let k = 0; k < N; k++) {
+    if (colr[k] < 0) continue; const i = k % nx, kk = (k / nx | 0) % nz, j = k / (nx * nz) | 0;
+    mtx.makeScale(cx, cy, cz).setPosition(-w / 2 + (i + .5) * cx, -h / 2 + (j + .5) * cy, -d / 2 + (kk + .5) * cz); inst.setMatrixAt(m, mtx);
+    inst.setColorAt(m, col.setHex(colr[k]).multiplyScalar(rand(.94, 1.03))); idx[k] = m++;
+  }
+  // 원래 그림은 한 묶음에 넣어 숨긴다(다른 코드가 조각의 visible을 바꿔도 다시 보이지 않게)
+  const hold = new THREE.Group(); for (const c of p.g.children.slice()) { const cm = Array.isArray(c.material) ? c.material[0] : c.material; if (!(c.isMesh && cm && cm.transparent)) hold.add(c); } hold.visible = false; p.g.add(hold);
+  inst.castShadow = !G.mobile; inst.receiveShadow = true; inst.computeBoundingSphere(); p.g.add(inst);
+  return p.vx = { nx, ny, nz, cx, cy, cz, idx, colr, inst, left: n, total: n };
+}
+// 물건이 피해를 입을 때마다 engine.damage가 부른다. true를 돌려주면 다 파먹힌 것 → 완전히 부순다
+function prop(p, dmg, pt, quiet) {
+  const v = pvox(p); if (!v) return false;
+  const [w, h, d] = p.size, b = p.body, bp = b.position, { nx, ny, nz, cx, cy, cz } = v;
+  if (pt && pt !== bp && Math.hypot(pt.x - bp.x, pt.y - bp.y, pt.z - bp.z) > .02) { lv.set(pt.x - bp.x, pt.y - bp.y, pt.z - bp.z); b.quaternion.conjugate(qc); qc.vmult(lv, wv); }
+  else { wv.set(rand(-w / 2, w / 2), rand(-h / 2, h / 2), rand(-d / 2, d / 2)); const a = Math.random() * 3 | 0, s = Math.random() < .5 ? -1 : 1; if (a === 0) wv.x = s * w / 2; else if (a === 1) wv.y = s * h / 2; else wv.z = s * d / 2; }
+  // 맞은 자리에서 가장 가까운 칸을 중심으로
+  let best = -1, bd = 1e9;
+  for (let k = 0; k < v.idx.length; k++) { if (v.idx[k] < 0) continue; const i = k % nx, kk = (k / nx | 0) % nz, j = k / (nx * nz) | 0, dx = -w / 2 + (i + .5) * cx - wv.x, dy = -h / 2 + (j + .5) * cy - wv.y, dz = -d / 2 + (kk + .5) * cz - wv.z, q = dx * dx + dy * dy + dz * dz; if (q < bd) { bd = q; best = k; } }
+  if (best < 0) return true;
+  const bi = best % nx, bk = (best / nx | 0) % nz, bj = best / (nx * nz) | 0, cs = (cx + cy + cz) / 3;
+  const r = clamp(Math.cbrt(clamp(dmg / p.maxHp, 0, 1) * v.total * .75 / Math.PI) * cs * 1.25, cs * .9, Math.max(w, h, d) * .6), r2 = r * r;
+  const ri = Math.ceil(r / cx), rj = Math.ceil(r / cy), rk = Math.ceil(r / cz), max = quiet ? 0 : G.mobile ? 2 : 3; let n = 0, hex = v.colr[best];
+  for (let j = Math.max(0, bj - rj); j <= Math.min(ny - 1, bj + rj); j++) for (let kk = Math.max(0, bk - rk); kk <= Math.min(nz - 1, bk + rk); kk++) for (let i = Math.max(0, bi - ri); i <= Math.min(nx - 1, bi + ri); i++) {
+    const k = (j * nz + kk) * nx + i; if (v.idx[k] < 0 || (quiet && v.left / v.total < .36)) continue;
+    const dx = (i - bi) * cx, dy = (j - bj) * cy, dz = (kk - bk) * cz; if (dx * dx + dy * dy + dz * dz > r2) continue;
+    v.inst.setMatrixAt(v.idx[k], zero); v.idx[k] = -1; v.left--;
+    if (n++ < max) { lv.set(-w / 2 + (i + .5) * cx, -h / 2 + (j + .5) * cy, -d / 2 + (kk + .5) * cz); b.quaternion.vmult(lv, wv); const l = Math.hypot(wv.x, wv.z) || 1; chip(bp.x + wv.x, bp.y + wv.y, bp.z + wv.z, Math.min(cs, .22) * rand(.7, 1), chipMat('#' + col.setHex(v.colr[k]).getHexString()), p.mat, { x: wv.x / l * rand(1, 4) + rand(-1, 1), y: rand(1, 4), z: wv.z / l * rand(1, 4) + rand(-1, 1) }); }
+  }
+  if (n) { v.inst.instanceMatrix.needsUpdate = true; if (!quiet && n > 3) { lv.set(-w / 2 + (bi + .5) * cx, -h / 2 + (bj + .5) * cy, -d / 2 + (bk + .5) * cz); b.quaternion.vmult(lv, wv); fx.bitsAt({ x: bp.x + wv.x, y: bp.y + wv.y, z: bp.z + wv.z }, Math.min(18, n), '#' + col.setHex(hex).getHexString(), 4, 2.5); } }
+  return v.left / v.total < .3;
+}
+// 층에 돌아왔을 때: 깎인 체력만큼 다시 파먹은 모습으로
+function scar(p) { const lost = p.maxHp - p.hp; if (lost <= 0) return; for (let n = 0; n < 3; n++) prop(p, lost / 3, null, true); }
+G.vox = { reg, hit, blast, bump, tick, reset, snap, restore, walls, chunks, prop, scar };

@@ -62,12 +62,12 @@ export function applyFloor(s) {
     const r = rec.get(p.seq); if (!r) continue;
     if (p.fixed && !r[9]) release(p);
     const b = p.body; b.position.set(r[1], r[2], r[3]); b.quaternion.set(r[4], r[5], r[6], r[7]); b.velocity.set(0, 0, 0); b.angularVelocity.set(0, 0, 0);
-    if (r[8] != null) p.hp = r[8]; if (r[10] && r[10] !== p.screen) setScreen(p, r[10]); if (r[11]) p.lift = r[11];
+    if (r[8] != null) { p.hp = r[8]; if (G.vox && p.hp > 0) G.vox.scar(p); } if (r[10] && r[10] !== p.screen) setScreen(p, r[10]); if (r[11]) p.lift = r[11];
     p.g.position.copy(b.position); p.g.quaternion.copy(b.quaternion); if (b.mass > 0) b.sleep();
     p.def.onRestore && p.def.onRestore(p);
   }
   for (const [type, opt, x, y, z, qx, qy, qz, qw, hp] of s.extra) {
-    const p = spawn(type, x, y, z, opt); p.body.quaternion.set(qx, qy, qz, qw); if (hp != null) p.hp = hp; p.g.position.copy(p.body.position); p.g.quaternion.copy(p.body.quaternion); p.body.sleep();
+    const p = spawn(type, x, y, z, opt); p.body.quaternion.set(qx, qy, qz, qw); if (hp != null) { p.hp = hp; if (G.vox && p.hp > 0) G.vox.scar(p); } p.g.position.copy(p.body.position); p.g.quaternion.copy(p.body.quaternion); p.body.sleep();
   }
   fx.restore(s.fx); if (G.vox && s.vox) G.vox.restore(s.vox);
   G.settle = G.tick + 90;
