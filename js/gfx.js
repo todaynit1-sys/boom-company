@@ -5,6 +5,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { G } from './state.js';
 export { THREE };
 export const X = { renderer: null, scene: null, camera: null, sun: null, hemi: null, level: null, lamps: [] };
@@ -19,6 +20,7 @@ export function canvasTex(w, h, fn, rep) {
 }
 export function speckle(c, w, h, n, a, dark = true) { for (let i = 0; i < n; i++) { c.fillStyle = `rgba(${dark ? '0,0,0' : '255,255,255'},${Math.random() * a})`; c.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 2, 1 + Math.random() * 2); } }
 const TEX = {
+  wallG: () => canvasTex(64, 256, (c, w, h) => { const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#efefef'); g.addColorStop(.2, '#fbfbfb'); g.addColorStop(.7, '#ffffff'); g.addColorStop(1, '#e6e6e6'); c.fillStyle = g; c.fillRect(0, 0, w, h); speckle(c, w, h, 500, .05); }),
   carpet: () => canvasTex(256, 256, (c, w, h) => { c.fillStyle = '#4f6485'; c.fillRect(0, 0, w, h); speckle(c, w, h, 5000, .2); speckle(c, w, h, 2500, .06, false); c.strokeStyle = 'rgba(0,0,0,.14)'; c.lineWidth = 2; c.strokeRect(0, 0, w, h); }, [28, 18]),
   wood: () => canvasTex(256, 256, (c, w, h) => { c.fillStyle = '#c8a070'; c.fillRect(0, 0, w, h); for (let i = 0; i < 90; i++) { c.strokeStyle = `rgba(90,55,20,${Math.random() * .16})`; c.lineWidth = 1 + Math.random() * 3; const y = Math.random() * h; c.beginPath(); c.moveTo(0, y); c.bezierCurveTo(w * .3, y + Math.random() * 8 - 4, w * .6, y + Math.random() * 8 - 4, w, y + Math.random() * 6 - 3); c.stroke(); } }),
   woodDark: () => canvasTex(256, 256, (c, w, h) => { c.fillStyle = '#5b3b24'; c.fillRect(0, 0, w, h); for (let i = 0; i < 90; i++) { c.strokeStyle = `rgba(20,8,0,${Math.random() * .25})`; c.lineWidth = 1 + Math.random() * 3; const y = Math.random() * h; c.beginPath(); c.moveTo(0, y); c.bezierCurveTo(w * .3, y + Math.random() * 8 - 4, w * .6, y + Math.random() * 8 - 4, w, y + Math.random() * 6 - 3); c.stroke(); } }),
@@ -45,7 +47,7 @@ const TEX = {
 export function tex(k) { return texs[k] || (texs[k] = TEX[k]()); }
 
 const MATDEF = {
-  carpet: { map: 'carpet', roughness: 1 }, wall: { color: '#e4d9c2', roughness: .95 }, wallDark: { color: '#4f7396', roughness: .85 }, ceiling: { map: 'ceiling', roughness: 1 },
+  carpet: { map: 'carpet', roughness: 1 }, wall: { color: '#e4d9c2', roughness: .95, map: 'wallG' }, wallDark: { color: '#4f7396', roughness: .85, map: 'wallG' }, ceiling: { map: 'ceiling', roughness: 1 },
   wood: { map: 'wood', roughness: .55 }, woodDark: { map: 'woodDark', roughness: .45 }, lam: { color: '#f1efe9', roughness: .6 }, lamGray: { color: '#8f979f', roughness: .55 },
   plasticDark: { color: '#24262b', roughness: .45 }, plasticGray: { color: '#8b9097', roughness: .5 }, plasticLight: { color: '#e4e1d8', roughness: .5 }, plasticBlue: { color: '#2f5fb3', roughness: .5 },
   metal: { color: '#b4bac0', roughness: .32, metalness: .85 }, metalDark: { color: '#4b5158', roughness: .4, metalness: .8 }, chrome: { color: '#e6e9ec', roughness: .12, metalness: 1 }, gold: { color: '#d9a531', roughness: .25, metalness: 1 },
@@ -59,21 +61,23 @@ const MATDEF = {
   skin: { color: '#e8b895', roughness: .7 }, shirt: { color: '#f3f1ec', roughness: .8 }, pants: { color: '#2b2f3a', roughness: .85 }, shoe: { color: '#1b1b1d', roughness: .4 }, hair: { color: '#1d1a18', roughness: .7 },
   concrete: { color: '#a9a7a0', roughness: .95 }, brick: { color: '#a8523c', roughness: .95 }, bglass: { color: '#7fb4d6', roughness: .1, metalness: .5 }, winLit: { color: '#fff3c4', emissive: '#ffe9a0', emissiveIntensity: .8 }, asphalt: { color: '#5f6360', roughness: 1 },
   // 새 층: 임원층·로비·주차장
-  carpetExec: { map: 'carpetExec', roughness: 1 }, marble: { map: 'marble', roughness: .18, metalness: .05 }, marbleDark: { color: '#33373d', roughness: .22, metalness: .1 }, wallWood: { color: '#6e4a30', roughness: .6 }, wallWarm: { color: '#e6dccb', roughness: .9 },
-  concreteTex: { map: 'concrete', roughness: .95 }, concreteWall: { color: '#9b9d99', roughness: .95 }, hazard: { map: 'hazard', roughness: .6 }, yellowPaint: { color: '#f2c21a', roughness: .45 }, orange: { color: '#ff6a1a', roughness: .5 },
+  carpetExec: { map: 'carpetExec', roughness: 1 }, marble: { map: 'marble', roughness: .18, metalness: .05 }, marbleDark: { color: '#33373d', roughness: .22, metalness: .1 }, wallWood: { color: '#6e4a30', roughness: .6 }, wallWarm: { color: '#e6dccb', roughness: .9, map: 'wallG' },
+  concreteTex: { map: 'concrete', roughness: .95 }, concreteWall: { color: '#9b9d99', roughness: .95, map: 'wallG' }, hazard: { map: 'hazard', roughness: .6 }, yellowPaint: { color: '#f2c21a', roughness: .45 }, orange: { color: '#ff6a1a', roughness: .5 },
   carGlass: { color: '#16202a', roughness: .05, metalness: .5, transparent: true, opacity: .82 }, carInside: { color: '#0b0c0e', roughness: .9 }, headlight: { color: '#fffaf0', emissive: '#fff4d6', emissiveIntensity: 1.2 }, taillight: { color: '#c21d12', emissive: '#ff2a1a', emissiveIntensity: .9 },
   celadon: { color: '#9cc6b2', roughness: .12 }, globe: { map: 'globe', roughness: .4 }, cream: { color: '#fff3df', roughness: .7 }, slats: { map: 'slats', roughness: .6 }, plaza: { color: '#b9b4aa', roughness: .95 },
   alarmLamp: { color: '#ff3a2a', emissive: '#ff2a1a', emissiveIntensity: .6 }, beacon: { color: '#ff9a1a', emissive: '#ff8a00', emissiveIntensity: 1 },
   fanGrill: { map: 'grill', roughness: .6 }, solarCell: { map: 'solar', roughness: .18, metalness: .3 }, grillTop: { map: 'grate', roughness: .5, metalness: .6 }, coals: { color: '#ff6a1a', emissive: '#ff4a00', emissiveIntensity: 1.2 },
   mirror: { color: '#e6e9ec', roughness: .05, metalness: 1, flatShading: true }, tankBlue: { color: '#3f86c4', roughness: .45 }, roofGreen: { map: 'roofGreen', roughness: .85 }, parquet: { map: 'parquet', roughness: .5 }, tileDark: { map: 'tileDark', roughness: .6 },
-  wallParty: { color: '#2c2240', roughness: .8 }, wallHall: { color: '#d9d2c3', roughness: .9 }, stage: { color: '#3b2a20', roughness: .5 }, curtain: { color: '#8a1c2b', roughness: .95 },
+  wallParty: { color: '#2c2240', roughness: .8, map: 'wallG' }, wallHall: { color: '#d9d2c3', roughness: .9, map: 'wallG' }, stage: { color: '#3b2a20', roughness: .5 }, curtain: { color: '#8a1c2b', roughness: .95 },
 };
+const BUMP = { carpet: 1.6, carpetExec: 1.6, ceiling: 1.2, concreteTex: 1.8, parquet: 1, tileDark: 1.5, roofGreen: 1.2, wood: .7, woodDark: .7, fabricBlue: 1.2, fabricDark: 1.2, fabricGray: 1.2, fabricPurple: 1.2, cardboard: .8, slats: 1.2, marble: .25 };
 // 자동차 도장: 반짝이는 색 (색마다 하나)
 export function paintMat(hex) { const k = 'paint' + hex; return mats[k] || (mats[k] = new THREE.MeshStandardMaterial({ color: hex, roughness: .22, metalness: .55 })); }
 export function M(k) {
   if (mats[k]) return mats[k];
   const d = Object.assign({}, MATDEF[k] || { color: k });
   if (d.map) d.map = tex(d.map);
+  if (!G.mobile && d.map && BUMP[k]) { d.bumpMap = d.map; d.bumpScale = BUMP[k]; }
   return mats[k] = new THREE.MeshStandardMaterial(d);
 }
 export function colorMat(hex, rough = .7) { const k = 'c' + hex + rough; return mats[k] || (mats[k] = new THREE.MeshStandardMaterial({ color: hex, roughness: rough })); }
@@ -176,7 +180,7 @@ export function pl(g, w, h, mat, x = 0, y = 0, z = 0, ry = 0, rx = 0) { const k 
 // ───── 하늘과 시간대
 const SKY = {};
 const SKYP = {
-  morning: ['#9cc6ee', '#f7e3cf', '#a5b4c3', 0], day: ['#8ec5f2', '#d9eefc', '#9fb4c4', 0], afternoon: ['#86b9e6', '#ece9df', '#98aabb', 0],
+  morning: ['#6faee8', '#f7dcc0', '#8fa3b8', 0], day: ['#4f9fe8', '#c4e2fa', '#8aa6bd', 0], afternoon: ['#5598de', '#eadfc8', '#8a9fb4', 0],
   evening: ['#f08a4b', '#ffd9a0', '#5c5470', .5], night: ['#0c1330', '#27325a', '#161b30', 1],
 };
 function skyTex(t) {
@@ -187,23 +191,29 @@ function skyTex(t) {
     if (t === 'morning') { c.fillStyle = 'rgba(255,236,205,.95)'; c.beginPath(); c.arc(w * .14, h * .66, 40, 0, 7); c.fill(); }
     if (t === 'evening') { c.fillStyle = '#fff1c0'; c.beginPath(); c.arc(w * .7, h * .62, 44, 0, 7); c.fill(); }
     if (t === 'night') { c.fillStyle = '#f5edc8'; c.beginPath(); c.arc(w * .2, h * .2, 26, 0, 7); c.fill(); }
+    const dayish = t !== 'night', sx = t === 'morning' ? w * .14 : t === 'evening' ? w * .7 : w * .32, sy = t === 'morning' || t === 'evening' ? h * .64 : h * .2;
+    const gl = c.createRadialGradient(sx, sy, 0, sx, sy, h * .7); gl.addColorStop(0, dayish ? 'rgba(255,244,214,.75)' : 'rgba(180,200,255,.25)'); gl.addColorStop(1, 'rgba(255,244,214,0)'); c.fillStyle = gl; c.fillRect(0, 0, w, h);
+    if (t === 'night') for (let i = 0; i < 160; i++) { c.fillStyle = 'rgba(255,255,255,' + (.2 + Math.random() * .7) + ')'; c.fillRect(Math.random() * w, Math.random() * h * .6, 1.5, 1.5); }
+    for (let i = 0; i < (t === 'night' ? 5 : 11); i++) { const cx = Math.random() * w, cy = h * (.08 + Math.random() * .42), cw = 70 + Math.random() * 130; for (let k = 0; k < 9; k++) { const px = cx + (Math.random() - .5) * cw * 1.6, py = cy + (Math.random() - .5) * 22, pr = 22 + Math.random() * 40, g2 = c.createRadialGradient(px, py, 0, px, py, pr), a = t === 'night' ? .1 : t === 'evening' ? .5 : .62; g2.addColorStop(0, (t === 'evening' ? 'rgba(255,214,180,' : 'rgba(255,255,255,') + a + ')'); g2.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g2; c.fillRect(px - pr, py - pr, pr * 2, pr * 2); } }
+    c.globalAlpha = .45; for (let i = 0; i < 34; i++) { const bw = 30 + Math.random() * 50, bh = 60 + Math.random() * 150; c.fillStyle = P[2]; c.fillRect(i * 31 + Math.random() * 14, h - bh, bw, bh); } c.globalAlpha = 1;
     for (let i = 0; i < 26; i++) { const bw = 40 + Math.random() * 70, bh = 120 + Math.random() * 260, x = i * 40 + Math.random() * 20; c.fillStyle = P[2]; c.fillRect(x, h - bh, bw, bh); for (let y = h - bh + 10; y < h - 8; y += 16) for (let xx = x + 6; xx < x + bw - 8; xx += 12) { if (Math.random() < .25 + P[3] * .3) { c.fillStyle = P[3] > .3 ? 'rgba(255,225,140,.9)' : 'rgba(255,255,255,.35)'; c.fillRect(xx, y, 6, 8); } } }
   });
 }
 const TIMES = {
-  morning: { sun: 2.1, sunCol: '#ffe4c8', hemi: .78, exp: .92, bg: '#dce8f4', env: .5, panel: 1.6, lamp: 0 },
-  day: { sun: 2.3, sunCol: '#fff3df', hemi: .8, exp: .92, bg: '#cfe6f7', env: .5, panel: 1.6, lamp: 0 },
-  afternoon: { sun: 2.45, sunCol: '#ffe8c0', hemi: .76, exp: .93, bg: '#d4e2ec', env: .5, panel: 1.6, lamp: 0 },
-  evening: { sun: 2.0, sunCol: '#ffc48a', hemi: .62, exp: .92, bg: '#f3b98a', env: .42, panel: 1.6, lamp: .25 },
-  night: { sun: .5, sunCol: '#9db0ff', hemi: .34, exp: .98, bg: '#141a33', env: .16, panel: .05, lamp: 1 },
+  morning: { sun: 4.4, sunCol: '#ffd9ae', hemi: .4, exp: .92, bg: '#dce8f4', env: .55, panel: 1.6, lamp: 0, fill: .8, pos: [11, 6, -14], fog: .010 },
+  day: { sun: 4.6, sunCol: '#fff1d8', hemi: .4, exp: .92, bg: '#cfe6f7', env: .6, panel: 1.6, lamp: 0, fill: .78, pos: [-5, 6.5, -13], fog: .008 },
+  afternoon: { sun: 4.6, sunCol: '#ffe2b0', hemi: .4, exp: .92, bg: '#d4e2ec', env: .55, panel: 1.6, lamp: 0, fill: .8, pos: [-11, 6, -14], fog: .010 },
+  evening: { sun: 4.6, sunCol: '#ff9d55', hemi: .36, exp: .98, bg: '#f3b98a', env: .45, panel: 1.6, lamp: .35, fill: .6, pos: [-14, 4, -13], fog: .014 },
+  night: { sun: .9, sunCol: '#9db0ff', hemi: .26, exp: 1.02, bg: '#141a33', env: .16, panel: .05, lamp: 1.15, fill: .1, pos: [7, 10, -13], fog: .014 },
   // 지하주차장: 햇빛 없이 형광등
-  garage: { sun: .28, sunCol: '#e4ecff', hemi: .62, exp: 1.02, bg: '#101316', env: .34, panel: 1.5, lamp: .85 },
+  garage: { sun: 0, sunCol: '#e4ecff', hemi: .5, exp: 1.04, bg: '#101316', env: .36, panel: 1.5, lamp: 1, fill: 1.25, fillCol: '#dfe9ff', pos: [6, 16, 7], fog: .018 },
   // B1 회식: 고깃집은 따뜻하게, 노래방은 색 조명
-  party: { sun: .25, sunCol: '#ffd9b0', hemi: .58, exp: 1.02, bg: '#0c0a14', env: .3, panel: 1.1, lamp: 1.5 },
+  party: { sun: 0, sunCol: '#ffd9b0', hemi: .42, exp: 1.04, bg: '#0c0a14', env: .3, panel: 1.1, lamp: 1.7, fill: .8, fillCol: '#ffd9b0', pos: [6, 16, 7], fog: .016 },
 };
 export function setTime(t) {
   const T = TIMES[t] || TIMES.day; X.time = t;
-  X.sun.intensity = T.sun; X.sun.color.set(T.sunCol); X.hemi.intensity = T.hemi; X.renderer.toneMappingExposure = T.exp; X.scene.background = new THREE.Color(T.bg); X.scene.environmentIntensity = T.env;
+  X.sun.intensity = T.sun; X.sun.color.set(T.sunCol); X.sun.position.set(T.pos[0], T.pos[1], T.pos[2]).multiplyScalar(1.6); X.sun.shadow.autoUpdate = T.sun > 0; X.hemi.intensity = T.hemi;
+  X.fill.intensity = T.fill; X.fill.color.set(T.fillCol || '#fff4e2'); X.scene.fog.color.set(T.bg); X.scene.fog.density = T.fog; drawShafts(); X.renderer.toneMappingExposure = T.exp; X.scene.background = new THREE.Color(SKYP[t] ? SKYP[t][0] : T.bg); X.scene.environmentIntensity = T.env;
   const lp = M('lightPanel'); lp.emissiveIntensity = T.panel; lp.color.set(T.panel < .5 ? '#77756f' : '#ffffff');
   X.lamps.forEach(l => { l.intensity = T.lamp * l.userData.base; });
   if (X.sky) X.sky.material.map = skyTex(t);
@@ -212,15 +222,19 @@ export function setTime(t) {
 export function initGfx(canvas) {
   const r = X.renderer = new THREE.WebGLRenderer({ canvas, antialias: !G.mobile, powerPreference: 'high-performance' });
   r.setPixelRatio(Math.min(window.devicePixelRatio || 1, G.mobile ? 1.5 : 2));
-  r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+  r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFShadowMap;
   r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace;
   const s = X.scene = new THREE.Scene();
   const pm = new THREE.PMREMGenerator(r); s.environment = pm.fromScene(new RoomEnvironment(), .04).texture; s.environmentIntensity = .5;
   X.camera = new THREE.PerspectiveCamera(58, 1, .05, 160);
   X.hemi = new THREE.HemisphereLight('#ffffff', '#8a8578', 1.1); s.add(X.hemi);
   const sun = X.sun = new THREE.DirectionalLight('#fff6e8', 2.4); sun.position.set(6, 16, 7); sun.castShadow = true;
-  const sc = sun.shadow.camera; sc.left = -17; sc.right = 17; sc.top = 13; sc.bottom = -13; sc.near = 1; sc.far = 40;
-  sun.shadow.mapSize.set(G.mobile ? 1024 : 2048, G.mobile ? 1024 : 2048); sun.shadow.bias = -.0004; sun.shadow.normalBias = .03;
+  const sc = sun.shadow.camera; sc.left = -20; sc.right = 20; sc.top = 15; sc.bottom = -15; sc.near = 1; sc.far = 70;
+  sun.shadow.mapSize.set(G.mobile ? 1024 : 4096, G.mobile ? 1024 : 4096); sun.shadow.bias = -.0005; sun.shadow.normalBias = .035; sun.shadow.radius = G.mobile ? 1.5 : 3;
+  // 천장 조명 몫: 위에서 내려오는 그림자 없는 빛
+  X.fill = new THREE.DirectionalLight('#fff4e2', 1.1); X.fill.position.set(0, 20, 0); s.add(X.fill); s.add(X.fill.target);
+  if (!G.mobile) { const f = X.fill; f.castShadow = true; const fc = f.shadow.camera; fc.left = -16; fc.right = 16; fc.top = 12; fc.bottom = -12; fc.near = 1; fc.far = 40; f.shadow.mapSize.set(2048, 2048); f.shadow.bias = -.0006; f.shadow.normalBias = .04; f.shadow.radius = 6; }
+  s.fog = new THREE.FogExp2('#cfe6f7', .008);
   s.add(sun); s.add(sun.target);
   // 밤에만 켜는 등 (늘 장면에 두어 셰이더를 한 번만 만든다)
   const l1 = new THREE.PointLight('#ffd6a0', 0, 9, 1.3); l1.userData.base = 9; l1.position.set(0, 2.55, -1.9);
@@ -232,10 +246,40 @@ export function initGfx(canvas) {
   if (!G.mobile) try {
     const rt = new THREE.WebGLRenderTarget(4, 4, { samples: 4, type: THREE.HalfFloatType });
     const c = X.composer = new EffectComposer(r, rt); c.addPass(new RenderPass(s, X.camera));
+    // 구석·물건 밑의 어두운 음영
+    try { const ao = X.ao = new GTAOPass(s, X.camera, 256, 256); ao.blendIntensity = .95; ao.updateGtaoMaterial({ radius: .55, distanceExponent: 1.2, thickness: 1.2, scale: 1.25, samples: 12 }); ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+      const ov = ao.overrideVisibility.bind(ao); ao.overrideVisibility = function () { ov(); this.scene.traverse(o => { if (!o.visible) return; const m = Array.isArray(o.material) ? o.material[0] : o.material; if (o.isSprite || (o.isMesh && m && (m.transparent || m.colorWrite === false))) o.visible = false; }); };
+      c.addPass(ao); } catch (e) { X.ao = null; }
     X.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), .26, .55, 1.4); c.addPass(X.bloom); c.addPass(new OutputPass());
   } catch (e) { X.composer = null; }
 }
-export function render() { if (X.composer) X.composer.render(); else X.renderer.render(X.scene, X.camera); }
+let ft = 0, fAvg = 16, fN = 0;
+export function render() {
+  if (X.composer) X.composer.render(); else X.renderer.render(X.scene, X.camera);
+  if (X.ao && X.ao.enabled && document.visibilityState === 'visible') { const now = performance.now(); if (ft && now - ft < 200) { if (++fN > 0) fAvg += (Math.min(50, now - ft) - fAvg) * .02; if (fN > 360 && fAvg > 33) X.ao.enabled = false; } ft = now; }
+}
+// 천장 위의 그늘막: 햇빛이 천장을 뚫고 들어오지 않게 그림자만 드리운다
+const shadeM = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+export function shade(L, H) { const m = new THREE.Mesh(new THREE.BoxGeometry(30, .3, 19.4), shadeM); m.position.set(0, H + .15, .3); m.castShadow = true; L.add(m); fillNear(20 - H + .04); return m; }
+// 천장 조명의 그림자는 천장 아래 것만 드리운다
+function fillNear(n) { if (X.fill && X.fill.castShadow) { X.fill.shadow.camera.near = n; X.fill.shadow.camera.updateProjectionMatrix(); } }
+// 창에서 바닥으로 비스듬히 떨어지는 빛줄기(해 방향에 맞춰 다시 그린다)
+const shaftT = () => texs.shaft || (texs.shaft = canvasTex(8, 128, (c, w, h) => { const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(255,255,255,.9)'); g.addColorStop(.5, 'rgba(255,255,255,.35)'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.fillRect(0, 0, w, h); }));
+const SHOP = { morning: .13, day: .1, afternoon: .13, evening: .2 };
+export function shafts(L, x, z, w, y0, y1) {
+  const m = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ map: shaftT(), color: '#fff0d0', transparent: true, opacity: .1, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+  m.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(24), 3)); m.geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0]), 2)); m.geometry.setIndex([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7]);
+  m.userData.s = [x, z, w, y0, y1]; m.frustumCulled = false; m.castShadow = false; m.renderOrder = 5; L.add(m); (X.shafts || (X.shafts = [])).push(m); drawShafts(); return m;
+}
+function drawShafts() {
+  if (!X.shafts || !X.sun) return; const sp = X.sun.position, op = SHOP[X.time] || 0;
+  X.shafts = X.shafts.filter(m => m.parent);
+  for (const m of X.shafts) {
+    const [x, z, w, y0, y1] = m.userData.s, p = m.geometry.attributes.position.array, dx = -sp.x / sp.y, dz = -sp.z / sp.y; m.visible = op > 0 && dz > 0; m.material.opacity = op; m.material.color.set(X.sun.color);
+    [y1, y0].forEach((y, q) => { const k = y * .8; p.set([x - w / 2, y, z, x + w / 2, y, z, x + w / 2 + dx * k, y - k, z + dz * k, x - w / 2 + dx * k, y - k, z + dz * k], q * 12); });
+    m.geometry.attributes.position.needsUpdate = true;
+  }
+}
 // 휴대폰 세로: 장면을 위로 22% 올려 그려서 캐릭터가 아래쪽 조작 버튼에 가리지 않게 한다(찌그러지지 않게 aspect도 맞춘다)
 export function resizeGfx(w, h) {
   X.renderer.setSize(w, h, false); const cam = X.camera, phone = G.mobile || Math.min(w, h) < 520, portrait = h > w;
@@ -244,4 +288,4 @@ export function resizeGfx(w, h) {
   cam.updateProjectionMatrix();
   if (X.composer) { X.composer.setPixelRatio(X.renderer.getPixelRatio()); X.composer.setSize(w, h); }
 }
-export function newLevel() { if (X.level) X.scene.remove(X.level); X.level = new THREE.Group(); X.scene.add(X.level); return X.level; }
+export function newLevel() { X.shafts = []; fillNear(1); fN = -90; fAvg = 16; if (X.level) X.scene.remove(X.level); X.level = new THREE.Group(); X.scene.add(X.level); return X.level; }

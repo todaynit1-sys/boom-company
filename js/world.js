@@ -1,5 +1,5 @@
 import { resetWorld, solid, spawn, kill, release, setScreen, settleFrags, flush, GR, PH, CANNON } from './engine.js';
-import { THREE, X, M, bx, pl, textMat, setTime } from './gfx.js';
+import { THREE, X, M, bx, pl, textMat, setTime, shade, shafts } from './gfx.js';
 import { DEFS } from './data/props.js';
 import { G, rand, pick, clamp } from './state.js';
 import * as fx from './fx.js';
@@ -176,7 +176,7 @@ export function buildOffice(co, time = 'day') {
   const fl = new THREE.Mesh(new THREE.PlaneGeometry(28, 18), M('carpet')); fl.rotation.x = -PI / 2; fl.receiveShadow = true; L.add(fl);
   const lob = new THREE.Mesh(new THREE.PlaneGeometry(28, 5.4), new THREE.MeshStandardMaterial({ color: '#d9d5cb', roughness: .28, metalness: .05 })); lob.rotation.x = -PI / 2; lob.position.set(0, .003, 6.3); lob.receiveShadow = true; L.add(lob);
   solid(0, 3.5, 0, 28.4, 1, 18.4);
-  const ce = new THREE.Mesh(new THREE.PlaneGeometry(28, 18), M('ceiling')); ce.rotation.x = PI / 2; ce.position.y = 3; L.add(ce);
+  const ce = new THREE.Mesh(new THREE.PlaneGeometry(28, 18), M('ceiling')); ce.rotation.x = PI / 2; ce.position.y = 3; L.add(ce); shade(L, 3);
   for (let x = -12; x <= 12; x += 4) for (let z = -6.5; z <= 6.5; z += 4.3) { const m = bx(L, 1.3, .03, .6, x === 0 && Math.abs(z + 2.2) < .1 ? 'lightPanelOn' : 'lightPanel', x, 2.985, z); m.castShadow = false; }
   // 남쪽 벽은 엘리베이터 자리를 비워 둔다
   const ex = EX;
@@ -184,7 +184,7 @@ export function buildOffice(co, time = 'day') {
   solid(-14.1, 1.5, 0, .2, 3, 18.4, 'wall'); solid(14.1, 1.5, 0, .2, 3, 18.4, 'wall');
   solid(0, .45, -9.1, 28.4, .9, .2, 'wall'); solid(0, 2.75, -9.1, 28.4, .5, .2, 'wall');
   for (let i = 0; i < 8; i++) solid(-14 + i * 4, 1.7, -9.1, .3, 1.6, .22, 'wall');
-  for (let i = 0; i < 7; i++) hang('window', -12 + i * 4, 1.7, -9.1, 0, { tag: 'win' + i });
+  for (let i = 0; i < 7; i++) { hang('window', -12 + i * 4, 1.7, -9.1, 0, { tag: 'win' + i }); shafts(L, -12 + i * 4, -8.95, 3.6, .95, 2.45); }
   solid(0, 1.5, -9.02, 28, 3, .06, null, { group: GR.PWALL, mask: GR.PLAYER });
   hang('timeclock', ex + 1.45, 1.35, 8.96, PI, { tag: 'timeclock' });
   // 기둥
@@ -244,6 +244,8 @@ const STY = { glass: ['bglass', 'winLit'], brick: ['brick', 'winLit'], gov: ['co
 export function buildExterior(co, time = 'day') {
   const L = resetWorld(); G.scene = 'ext'; G.elevDoors = null; G.elev = null; G.outZone = null; G.ceil = null; G.heads = null; beginFloor();
   setTime(time);
+  // 건물 앞: 해가 정면에서 비추고, 멀리까지 보이게 안개는 옅게
+  X.sun.position.set(12, 18, 16); X.scene.fog.density *= .35;
   solid(0, -.5, 0, 120, 1, 120);
   const gr = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), M('asphalt')); gr.rotation.x = -PI / 2; gr.receiveShadow = true; L.add(gr);
   const wm = (STY[co.style] || STY.glass)[0];

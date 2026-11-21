@@ -165,7 +165,7 @@ button,input{font:inherit;color:inherit}input{user-select:text;-webkit-user-sele
 @media (max-width:640px){#band{display:none!important}#tip{bottom:372px;font-size:13px;white-space:normal;width:max-content;max-width:88vw;text-align:center}#hud{gap:6px;padding:6px 8px}.h-left b{font-size:15px}.h-right b{font-size:18px}.h-mid{flex:1 1 0}#h-pct{display:none}#obj{top:54px;font-size:12px;width:min(230px,58vw);padding:6px 8px}#obj div:not(.now){display:none}#status{display:none!important}#prompt{bottom:214px}#subt{bottom:270px}#ch-list{grid-template-columns:repeat(3,1fr)}.ch-row{flex-direction:column;gap:0}.panel.dock{max-height:54%;padding:10px 12px}.panel.dock h2{font-size:20px;margin-bottom:6px}.chc .hint{display:none}}
 #b-rush{width:100%;background:var(--yellow);font-family:"Black Han Sans";font-weight:400;font-size:21px;padding:6px 14px 8px}#b-rush small{font-family:"Noto Sans KR";font-weight:900;font-size:12px;margin-left:8px;opacity:.8}
 body.phone-l #b-rush{font-size:17px;padding:4px 12px 5px}body.phone-l .logo p{display:none}
-#cv{filter:saturate(1.28) contrast(1.06) brightness(1.02)}
+#cv{filter:saturate(1.14) contrast(1.05)}
 #shade{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 45%,rgba(0,0,0,0) 58%,rgba(10,12,24,.34) 100%)}
 #obj{pointer-events:auto;cursor:pointer;width:min(250px,56vw);background:rgba(251,247,238,.9);padding:6px 9px 7px}
 #obj h3{font-size:13px;margin-bottom:3px;padding-bottom:3px}#obj h3:after{content:"펼치기";font-family:"Noto Sans KR";font-weight:900;font-size:10px;opacity:.5;margin-left:6px}#obj.open h3:after{content:"접기"}
