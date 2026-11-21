@@ -1,5 +1,5 @@
 import { resetWorld, solid, spawn, kill, release, setScreen, settleFrags, flush, GR, PH, CANNON } from './engine.js';
-import { THREE, X, M, bx, pl, textMat, setTime, shade, shafts } from './gfx.js';
+import { THREE, X, M, bx, pl, textMat, setTime, shade, shafts, windowTrim } from './gfx.js';
 import { DEFS } from './data/props.js';
 import { G, rand, pick, clamp } from './state.js';
 import * as fx from './fx.js';
@@ -184,7 +184,7 @@ export function buildOffice(co, time = 'day') {
   solid(-14.1, 1.5, 0, .2, 3, 18.4, 'wall'); solid(14.1, 1.5, 0, .2, 3, 18.4, 'wall');
   solid(0, .45, -9.1, 28.4, .9, .2, 'wall'); solid(0, 2.75, -9.1, 28.4, .5, .2, 'wall');
   for (let i = 0; i < 8; i++) solid(-14 + i * 4, 1.7, -9.1, .3, 1.6, .22, 'wall');
-  for (let i = 0; i < 7; i++) { hang('window', -12 + i * 4, 1.7, -9.1, 0, { tag: 'win' + i }); shafts(L, -12 + i * 4, -8.95, 3.6, .95, 2.45); }
+  for (let i = 0; i < 7; i++) { hang('window', -12 + i * 4, 1.7, -9.1, 0, { tag: 'win' + i }); shafts(L, -12 + i * 4, -8.95, 3.6, .95, 2.45); windowTrim(L, -12 + i * 4, -9.02); }
   solid(0, 1.5, -9.02, 28, 3, .06, null, { group: GR.PWALL, mask: GR.PLAYER });
   hang('timeclock', ex + 1.45, 1.35, 8.96, PI, { tag: 'timeclock' });
   // 기둥

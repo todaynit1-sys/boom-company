@@ -1,7 +1,7 @@
 // 건물 층: 12층 임원층 · 7층 우리 팀(사무실) · 1층 로비·카페 · B2 지하주차장
 // 모든 층은 같은 바닥 넓이(28×18m)이고, 엘리베이터는 남쪽 벽 x=-3.5 같은 자리에 있다
 import { resetWorld, solid, GR } from './engine.js';
-import { THREE, X, M, bx, cyl, sph, pl, textMat, labelMat, speckle, tex, setTime, canvasTex, shade, shafts } from './gfx.js';
+import { THREE, X, M, bx, cyl, sph, pl, textMat, labelMat, speckle, tex, setTime, canvasTex, shade, shafts, windowTrim } from './gfx.js';
 import { G } from './state.js';
 import { put, on, hang, beginFloor, elevatorBay, sprinklers, buildOffice, EX } from './world.js';
 
@@ -115,7 +115,7 @@ function panels(L, y) { for (let x = -12; x <= 12; x += 4) for (let z = -6.5; z 
 function northWindows(H) {
   solid(0, .45, -9.1, 28.4, .9, .2, 'wall'); solid(0, (2.5 + H) / 2, -9.1, 28.4, H - 2.5, .2, 'wall');
   for (let i = 0; i < 8; i++) solid(-14 + i * 4, 1.7, -9.1, .3, 1.6, .22, 'wall');
-  for (let i = 0; i < 7; i++) { hang('window', -12 + i * 4, 1.7, -9.1, 0, { tag: 'win' + i }); shafts(X.level, -12 + i * 4, -8.95, 3.6, .95, 2.45); }
+  for (let i = 0; i < 7; i++) { hang('window', -12 + i * 4, 1.7, -9.1, 0, { tag: 'win' + i }); shafts(X.level, -12 + i * 4, -8.95, 3.6, .95, 2.45); windowTrim(X.level, -12 + i * 4, -9.02); }
   solid(0, H / 2, -9.02, 28, H, .06, null, { group: GR.PWALL, mask: GR.PLAYER });
 }
 const tiledM = {};

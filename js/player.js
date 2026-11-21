@@ -227,7 +227,7 @@ export function buildRig(id, acc, g) {
     R['sh' + k] = sh; R['el' + k] = el; R['hand' + k] = hd; R['fing' + k] = fg;
   }
   // 머리
-  const head = R.head = grp(sp, 0, .72, .008); head.scale.setScalar(F ? 1.24 : 1.27); head.position.y = .745;
+  const head = R.head = grp(sp, 0, .72, .008); head.scale.setScalar(F ? 1.46 : 1.5); head.position.y = .772;
   mesh(head, shell('head', 1), skin);
   R.face = new THREE.Mesh(shell('face', 1.01, null, { ps: FRONT - .95, pl: 1.9, ts: .72, tl: 2.0, w: 22, h: 20 }), new THREE.MeshStandardMaterial({ map: faceTex(ch, 'normal'), transparent: true, roughness: .6, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
   head.add(R.face);

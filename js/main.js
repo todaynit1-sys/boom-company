@@ -1,6 +1,6 @@
 import { G } from './state.js';
 import { S } from './save.js';
-import { X, initGfx, resizeGfx, render } from './gfx.js';
+import { X, initGfx, resizeGfx, render, highlight } from './gfx.js';
 import { tick } from './engine.js';
 import * as fx from './fx.js';
 import { I, P, CAM, renderPlayer } from './player.js';
@@ -113,7 +113,7 @@ function bot() {
 // ───── 루프
 let acc = 0, lastT = 0;
 function step() { pollKeys(); if (G.auto) bot(); tick(); tickWorld(); }
-function draw(dt) { renderPlayer(dt); render(); fx.drawTexts(W, H); flashEl.style.opacity = G.flash > 0 && !G.calm ? Math.min(.7, G.flash / 8) : 0; }
+function draw(dt) { renderPlayer(dt); const hc = P.active && !G.paused && R.mode !== 'title' ? (P.cand && !P.cand.dead ? P.cand : G.want && !G.want.dead && !G.want.held ? G.want : null) : null; highlight(hc ? hc.g : null); render(); fx.drawTexts(W, H); flashEl.style.opacity = G.flash > 0 && !G.calm ? Math.min(.7, G.flash / 8) : 0; }
 function frame(t) {
   const dt = Math.min(100, t - lastT); lastT = t;
   // 한 번 틀려도 게임이 멈추지 않게: 오류는 기록만 하고 다음 틱으로 넘어간다

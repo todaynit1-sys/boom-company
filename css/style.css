@@ -233,3 +233,38 @@ body.phone-l .logo h1{font-size:44px}body.phone-l .logo p{font-size:12px;margin-
 body.phone-l .panel{padding:10px 14px}body.phone-l .panel h2{font-size:20px;margin-bottom:6px}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01s!important}}
 #fxt .say{font-weight:900;font-size:clamp(12px,1.5vw,16px);color:var(--ink);background:#fff;border:2.5px solid var(--ink);border-radius:12px;padding:3px 10px;box-shadow:2px 2px 0 var(--ink);white-space:nowrap}
+
+/* ───── 화면 표시 새 모습: 어두운 반투명 둥근 판 */
+#hud{background:none;align-items:flex-start;padding:12px 14px;gap:12px}
+.h-left{flex:0 1 auto;max-width:34vw;background:rgba(24,26,32,.8);border-radius:12px;padding:9px 16px 10px;backdrop-filter:blur(6px)}
+.h-left b{font-family:"Noto Sans KR";font-weight:900;text-shadow:none;letter-spacing:-.02em}
+.h-left span{opacity:.82;margin-top:1px}
+.h-mid{flex:0 1 520px;max-width:none;margin:0 auto;background:rgba(24,26,32,.8);border-radius:999px;padding:7px 16px 7px 14px;backdrop-filter:blur(6px);color:#fff}
+.h-mid:before{content:"스트레스";font-weight:900;font-size:14px;margin-right:2px;white-space:nowrap}
+.h-mid .face{display:none}
+.h-mid .bar{height:16px;border:0;background:rgba(255,255,255,.14);border-radius:999px}
+.h-mid .bar>div{background:linear-gradient(90deg,#ffd43b,#ff9f43 55%,#ff5d7a);border-radius:999px}
+.h-right{background:rgba(24,26,32,.8);border-radius:12px;padding:7px 14px 8px;backdrop-filter:blur(6px);text-align:right}
+.h-right b{font-family:"Noto Sans KR";font-weight:900;text-shadow:none;color:#fff}
+.h-right b:before{content:"피해 금액";font-size:13px;font-weight:700;opacity:.8;margin-right:10px;vertical-align:2px}
+#b-pause{background:rgba(24,26,32,.8)!important;border:0!important;border-radius:10px!important;box-shadow:none!important;backdrop-filter:blur(6px)}
+#b-pause span{background:#fff!important}
+#obj{background:rgba(250,250,250,.93);border:0;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.28);padding:9px 12px 10px;top:104px;left:14px}
+#obj h3{font-family:"Noto Sans KR";font-weight:900;border-bottom:1px solid rgba(0,0,0,.12)}
+#obj div i{border:2px solid #2a2d33;border-radius:5px;width:16px;height:16px;line-height:12px}
+#obj div.now{background:none;margin:1px 0;padding:2px 0;font-size:14px}
+#keys{left:14px;right:auto;top:auto;bottom:14px;text-align:left;max-width:70vw;font-size:13px;line-height:2.2;background:rgba(24,26,32,.62);border-radius:12px;padding:4px 14px 4px 4px;text-shadow:none;backdrop-filter:blur(6px)}
+#keys b{background:#fff;color:#1b1d22;border:0;border-radius:6px;padding:2px 8px;margin:0 6px 0 10px;box-shadow:0 2px 0 rgba(0,0,0,.35);font-weight:900}
+#prompt{background:rgba(24,26,32,.84);color:#fff;border:0;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.3);backdrop-filter:blur(6px)}
+#prompt b{background:#fff;color:#1b1d22;border-radius:6px;padding:1px 8px;margin:0 6px 0 2px;box-shadow:0 2px 0 rgba(0,0,0,.35)}
+#prompt .bar{border:0;background:rgba(255,255,255,.18)}
+#status{background:rgba(24,26,32,.7);border-radius:999px;padding:5px 12px;backdrop-filter:blur(6px);left:auto!important;right:14px}
+#status .bar{border:0;background:rgba(255,255,255,.16)}
+@media (max-width:640px){#hud{padding:6px 8px;gap:6px}.h-left{padding:5px 10px 6px;max-width:40vw}.h-mid{padding:5px 10px}.h-mid:before{display:none}.h-right{padding:5px 9px 6px}.h-right b:before{display:none}#obj{top:64px;left:8px}#status{right:8px}}
+body.phone-l #obj{top:52px}body.phone-l .h-mid:before,body.phone-l .h-right b:before{display:none}
+@media (max-width:640px){.h-left{flex:0 1 auto;max-width:48vw}.h-mid{flex:1 1 0;min-width:64px;margin:0}}
+body.phone-l #obj{top:62px}body.phone-l .h-left{max-width:30vw}
+.h-right{flex:0 0 auto}
+@media (max-width:900px){.h-mid:before,.h-right b:before{display:none}.h-mid .bar{min-width:60px}}
+body.phone-l .h-left,body.phone-l .h-right{padding:4px 10px 5px}body.phone-l #obj,body.phone-l #elev{top:70px}
+body.phone-p #status{bottom:200px}

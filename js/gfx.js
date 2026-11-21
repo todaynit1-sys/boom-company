@@ -6,6 +6,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { G } from './state.js';
 export { THREE };
 export const X = { renderer: null, scene: null, camera: null, sun: null, hemi: null, level: null, lamps: [] };
@@ -52,7 +53,7 @@ const MATDEF = {
   plasticDark: { color: '#24262b', roughness: .45 }, plasticGray: { color: '#8b9097', roughness: .5 }, plasticLight: { color: '#e4e1d8', roughness: .5 }, plasticBlue: { color: '#2f5fb3', roughness: .5 },
   metal: { color: '#b4bac0', roughness: .32, metalness: .85 }, metalDark: { color: '#4b5158', roughness: .4, metalness: .8 }, chrome: { color: '#e6e9ec', roughness: .12, metalness: 1 }, gold: { color: '#d9a531', roughness: .25, metalness: 1 },
   fabricBlue: { color: '#33507c', map: 'fabric', roughness: 1 }, fabricDark: { color: '#2c2f36', map: 'fabric', roughness: 1 }, fabricGray: { color: '#7d8894', map: 'fabric', roughness: 1 }, fabricPurple: { color: '#5a3e8a', map: 'fabric', roughness: 1 }, leather: { color: '#3a2a22', roughness: .5 },
-  glass: { color: '#bfe2ee', roughness: .04, metalness: .1, transparent: true, opacity: .26 }, glassFrost: { color: '#e4eef2', roughness: .5, transparent: true, opacity: .55 }, glassDark: { color: '#0d1014', roughness: .08, metalness: .4 },
+  glass: { color: '#cfe8f2', roughness: .04, metalness: .1, transparent: true, opacity: .16 }, glassFrost: { color: '#e4eef2', roughness: .5, transparent: true, opacity: .55 }, glassDark: { color: '#0d1014', roughness: .08, metalness: .4 },
   ceramic: { color: '#f4f2ec', roughness: .25 }, cardboard: { map: 'cardboard', roughness: .9 }, paper: { color: '#fbfaf5', roughness: .9 }, paperSide: { color: '#dcd9d0', roughness: .9 },
   leaf: { color: '#2f7d3c', roughness: .7 }, pot: { color: '#b9603c', roughness: .8 }, soil: { color: '#4a3524', roughness: 1 },
   red: { color: '#c9281f', roughness: .4 }, green: { color: '#2a8a45', roughness: .3, transparent: true, opacity: .85 }, beer: { color: '#e8b53a', roughness: .1, transparent: true, opacity: .8 }, water: { color: '#8fd0ff', roughness: .05, transparent: true, opacity: .55 },
@@ -180,7 +181,7 @@ export function pl(g, w, h, mat, x = 0, y = 0, z = 0, ry = 0, rx = 0) { const k 
 // ───── 하늘과 시간대
 const SKY = {};
 const SKYP = {
-  morning: ['#6faee8', '#f7dcc0', '#8fa3b8', 0], day: ['#4f9fe8', '#c4e2fa', '#8aa6bd', 0], afternoon: ['#5598de', '#eadfc8', '#8a9fb4', 0],
+  morning: ['#6faee8', '#f7dcc0', '#73889f', 0], day: ['#4f9fe8', '#a9d4f5', '#6585a6', 0], afternoon: ['#5598de', '#e6d6b8', '#6c8199', 0],
   evening: ['#f08a4b', '#ffd9a0', '#5c5470', .5], night: ['#0c1330', '#27325a', '#161b30', 1],
 };
 function skyTex(t) {
@@ -250,10 +251,19 @@ export function initGfx(canvas) {
     try { const ao = X.ao = new GTAOPass(s, X.camera, 256, 256); ao.blendIntensity = .95; ao.updateGtaoMaterial({ radius: .55, distanceExponent: 1.2, thickness: 1.2, scale: 1.25, samples: 12 }); ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
       const ov = ao.overrideVisibility.bind(ao); ao.overrideVisibility = function () { ov(); this.scene.traverse(o => { if (!o.visible) return; const m = Array.isArray(o.material) ? o.material[0] : o.material; if (o.isSprite || (o.isMesh && m && (m.transparent || m.colorWrite === false))) o.visible = false; }); };
       c.addPass(ao); } catch (e) { X.ao = null; }
+    try { const ol = X.outline = new OutlinePass(new THREE.Vector2(256, 256), s, X.camera); ol.edgeStrength = 2.5; ol.edgeGlow = .5; ol.edgeThickness = 1.6; ol.pulsePeriod = 0; ol.visibleEdgeColor.set('#ffd23f'); ol.hiddenEdgeColor.set('#7a5a00'); ol.enabled = false; const orr = ol.render.bind(ol); ol.render = (...a) => { const sm = r.shadowMap, au = sm.autoUpdate; sm.autoUpdate = false; orr(...a); sm.autoUpdate = au; }; c.addPass(ol); } catch (e) { X.outline = null; }
     X.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), .26, .55, 1.4); c.addPass(X.bloom); c.addPass(new OutputPass());
   } catch (e) { X.composer = null; }
 }
 let ft = 0, fAvg = 16, fN = 0;
+const blindT = () => texs.blind || (texs.blind = canvasTex(64, 64, (c, w, h) => { c.fillStyle = '#e9e6de'; c.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 8) { c.fillStyle = 'rgba(0,0,0,.22)'; c.fillRect(0, y + 6, w, 2); c.fillStyle = 'rgba(255,255,255,.5)'; c.fillRect(0, y, w, 1); } }, [1, 5]));
+let blindM;
+export function windowTrim(L, x, z) {
+  for (const dx of [-1.23, 0, 1.23]) { const m = bx(L, .05, 1.6, .07, 'metalDark', x + dx, 1.7, z); m.castShadow = true; }
+  const b = bx(L, 3.7, .42, .04, blindM || (blindM = new THREE.MeshStandardMaterial({ map: blindT(), roughness: .8 })), x, 2.29, z + .07); b.castShadow = true; return b;
+}
+// 테두리로 강조할 물건(없으면 null)
+export function highlight(g) { const o = X.outline; if (!o) return; if (g) { if (o.selectedObjects[0] !== g) o.selectedObjects = [g]; o.enabled = true; } else if (o.enabled) { o.selectedObjects = []; o.enabled = false; } }
 export function render() {
   if (X.composer) X.composer.render(); else X.renderer.render(X.scene, X.camera);
   if (X.ao && X.ao.enabled && document.visibilityState === 'visible') { const now = performance.now(); if (ft && now - ft < 200) { if (++fN > 0) fAvg += (Math.min(50, now - ft) - fAvg) * .02; if (fN > 360 && fAvg > 33) X.ao.enabled = false; } ft = now; }
