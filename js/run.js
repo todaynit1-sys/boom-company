@@ -5,6 +5,7 @@ import { later, slow, explode, shove, breakProp, settleFrags, setScreen, spawn }
 import { P, I, CAM, spawnPlayer, updatePlayer, sit, standUp, setFace, camHold, camGlide, camTo, placeAt, throwCarry, equip, carry } from './player.js';
 import { FLOORS, FLOOR_IDS, FLOOR_LINES, FLOOR_GREET, buildFloor, floorName, floorLv } from './floors.js';
 import { tickToys, resetToys, TOY } from './toys.js';
+import { spawnPeople } from './people.js';
 import { MISSIONS, MS, startMission, stopMission, tickMission, missionHud, rebind } from './missions.js';
 import { SETS, COMMON } from './data/lines.js';
 import { setTime } from './gfx.js';
@@ -86,7 +87,7 @@ function setup(id) {
   const m = MISSIONS[id]; let pre = [];
   stopMission(); fx.clearFxSoft(); ui.over(''); P.cheer = false; G.toys = false;
   G.clock = m.clock[0] * 60 + m.clock[1];
-  if (!R.course || !R.built) { buildOffice(R.co, m.sky); R.built = true; R.cfloor = 'office'; R.csnap = {}; R.cwet = {}; resetToys(); spawnPlayer(S.char, 0, 2, Math.PI); }
+  if (!R.course || !R.built) { buildOffice(R.co, m.sky); R.built = true; R.cfloor = 'office'; R.csnap = {}; R.cwet = {}; resetToys(); spawnPlayer(S.char, 0, 2, Math.PI); spawnPeople('office', [[0, 2, 3.5], [EX, 8.5, 3.5]]); }
   else {
     // 다른 층에서 끝났으면 우리 층으로 돌아온다(그 층은 부순 채로 기억해 둔다)
     if (R.cfloor !== 'office') courseFloor('office', m.sky);
@@ -117,7 +118,7 @@ function courseFloor(to, sky) {
   R.csnap[R.cfloor] = snapshotFloor(); R.cwet[R.cfloor] = TOY.wet; resetToys();
   if (to === 'office') buildOffice(R.co, sky); else buildFloor(to, R.co, sky);
   applyFloor(R.csnap[to]); TOY.wet = !!R.cwet[to]; R.cfloor = to; G.mult = mult;
-  spawnPlayer(S.char, EX, 9.95, Math.PI);
+  spawnPlayer(S.char, EX, 9.95, Math.PI); spawnPeople(to, [[EX, 8.5, 3.5]]);
   if (keep.weapon) { equip(keep.weapon, { fuel: keep.fuel }); P.wdur = keep.wdur; }
   G.onTick = playTick; rebind();
 }
@@ -213,8 +214,8 @@ export function startFree(floor = 'office') {
   enterFloor(floor); arrive();
   ui.keysHint(true); after(12000, () => ui.keysHint(false)); music('rage');
   ui.tips(G.mobile
-    ? ['엘리베이터 안에 들어서면 다른 층 버튼이 나와요', '의자: 행동 꾹 = 올라타기 · 카트·지게차: 행동 = 타기', '소화기를 들고 때리기 꾹 — 아래를 보고 뿜으면 날아요', '빨간 비상벨을 누르면 스프링클러가 터져요']
-    : ['엘리베이터 안에 들어서면 층 버튼이 나와요 (숫자 키로도)', '의자: <b>E</b> 꾹 = 올라타기 · 카트·지게차: <b>E</b> = 타기', '소화기를 들고 <b>좌클릭</b> 꾹 — 아래를 보고 뿜으면 날아요', '빨간 비상벨을 누르면 스프링클러가 터져요']);
+    ? ['엘리베이터 안에 들어서면 다른 층 버튼이 나와요', '의자: 행동 꾹 = 올라타기 · 카트·지게차: 행동 = 타기', '소화기를 들고 때리기 꾹 — 아래를 보고 뿜으면 날아요', '빨간 비상벨을 누르면 스프링클러가 터져요', '벽도 부서져요 — 발차기나 무기로 뚫고 지나가 보세요', '잔소리하는 부장님, 이제 때려도 됩니다']
+    : ['엘리베이터 안에 들어서면 층 버튼이 나와요 (숫자 키로도)', '의자: <b>E</b> 꾹 = 올라타기 · 카트·지게차: <b>E</b> = 타기', '소화기를 들고 <b>좌클릭</b> 꾹 — 아래를 보고 뿜으면 날아요', '빨간 비상벨을 누르면 스프링클러가 터져요', '벽도 부서져요 — 발차기나 무기로 뚫고 지나가 보세요', '잔소리하는 부장님, 이제 때려도 됩니다']);
 }
 // 도착: 문이 열리고, 홀 쪽에서 본 카메라 앞으로 걸어 나온 뒤 등 뒤 시점으로
 function arrive() {
@@ -224,7 +225,7 @@ function arrive() {
 }
 function enterFloor(id) {
   buildFloor(id, R.co, R.sky); applyFloor(R.snap[id]); resetToys(!!R.wet[id]);
-  spawnPlayer(S.char, EX, 9.95, Math.PI);
+  spawnPlayer(S.char, EX, 9.95, Math.PI); spawnPeople(id, [[EX, 8.5, 3.5]]);
   camHold([EX + 2.3, 1.75, 4.9], [EX, 1.15, 9.2]);
   R.label = floorName(id); R.cabArm = false; R.panel = false; ui.elev(null);
   G.emit = track; G.onAlarm = on => ui.alarm(on);

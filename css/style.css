@@ -232,3 +232,4 @@ body.phone-l #goalt{top:46px}body.phone-l #goalt b{font-size:18px}body.phone-l #
 body.phone-l .logo h1{font-size:44px}body.phone-l .logo p{font-size:12px;margin-top:4px}body.phone-l #s-title{padding:6px 12px 8px}body.phone-l .t-btns{gap:5px}body.phone-l .btn{padding:6px 12px;font-size:14px}body.phone-l .btn.main{font-size:22px;padding:5px 20px 7px}body.phone-l .rank{padding:3px 10px}
 body.phone-l .panel{padding:10px 14px}body.phone-l .panel h2{font-size:20px;margin-bottom:6px}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01s!important}}
+#fxt .say{font-weight:900;font-size:clamp(12px,1.5vw,16px);color:var(--ink);background:#fff;border:2.5px solid var(--ink);border-radius:12px;padding:3px 10px;box-shadow:2px 2px 0 var(--ink);white-space:nowrap}

@@ -23,9 +23,18 @@ export const CHARS = {
 };
 // 성별에 맞춘 모습 (능력치는 같다)
 export function look(id, g) {
-  const b = CHARS[id], gg = g || b.g || 'm', o = Object.assign({}, b, (gg === 'f' ? b.f : b.m) || {});
+  const b = CHARS[id] || NPCS[id], gg = g || b.g || 'm', o = Object.assign({}, b, (gg === 'f' ? b.f : b.m) || {});
   delete o.f; delete o.m; o.gender = gg; o.key = id + gg; return o;
 }
+// 때릴 수 있는 사람들. 능력치는 없고 모습과 잔소리만 있다
+export const NPCS = {
+  bujang: { n: '부장님', g: 'm', skin: '#d8a680', hairCol: '#5c5650', hair: 'bald', top: 'suit', suit: '#6a6f77', shirt: '#eef0f3', tie: '#7a2030', pants: '#3a3e45', shoes: '#18181a', badge: true, belly: true, build: 1.12, lines: ['보고서는 아직인가?', '오늘 야근 되지?', '주말에 등산 어때?', '요즘 친구들은 말이야…'] },
+  timjang: { n: '팀장님', g: 'f', skin: '#eec4a4', hairCol: '#3b2f2a', hair: 'perm', top: 'blazer', suit: '#7a2a3a', shirt: '#ffffff', tie: null, scarf: '#e3b23c', pants: '#2b2f3a', shoes: '#1d1414', badge: true, build: .98, lines: ['이거 오늘까지예요', '회의 한 번 더 하죠', '메일 못 봤어요?'] },
+  insa: { n: '인사팀 과장', g: 'm', skin: '#e6b48f', hairCol: '#1b1714', hair: 'short', glasses: true, top: 'suit', suit: '#3d4a3f', shirt: '#f4f2ec', tie: '#2a3a2e', pants: '#2b2f3a', shoes: '#18181a', badge: true, build: .97, lines: ['연차는 반려입니다', '근태 확인 좀 하죠', '평가 기간인 거 알죠?'] },
+  sajang: { n: '사장님', g: 'm', skin: '#cf9a74', hairCol: '#8a857e', hair: 'slick', top: 'suit', suit: '#1b1d22', shirt: '#f4f2ec', tie: '#e3b23c', pants: '#1b1d22', shoes: '#18181a', badge: false, belly: true, build: 1.1, lines: ['우리는 가족이야', '열정! 도전! 혁신!', '월급은 마음으로 받는 걸세'] },
+  sangmu: { n: '상무님', g: 'm', skin: '#d5a07b', hairCol: '#4a4540', hair: 'short', top: 'suit', suit: '#1d2a44', shirt: '#eef0f3', tie: '#24448a', pants: '#1d2a44', shoes: '#18181a', badge: true, build: 1.04, lines: ['자네 이름이 뭐였지?', '골프는 좀 치나?', '내가 왕년에는 말이야'] },
+  gap: { n: '거래처 김 사장', g: 'm', skin: '#c78d66', hairCol: '#2a211a', hair: 'slick', sun: true, top: 'aloha', suit: '#2f6bff', shirt: '#2f6bff', tie: null, pants: '#e9e1cf', shoes: '#7a5532', badge: false, belly: true, build: 1.08, lines: ['단가 좀 깎지?', '오늘 접대 있지?', '갑이 누군지 알지?'] },
+};
 export const ACCS = [
   { id: null, n: '없음', rank: 0 }, { id: 'band', n: '「투쟁」 머리띠', rank: 2 }, { id: 'sun', n: '선글라스', rank: 3 },
   { id: 'helmet', n: '안전모', rank: 5 }, { id: 'chain', n: '금목걸이', rank: 6 },

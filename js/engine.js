@@ -7,11 +7,12 @@ import { sfx, buzz } from './audio.js';
 export { CANNON };
 
 export const PH = { world: null };
-export const GR = { STATIC: 1, PROP: 2, FRAG: 4, PLAYER: 8, PWALL: 16, FORK: 32 };
+export const GR = { STATIC: 1, PROP: 2, FRAG: 4, PLAYER: 8, PWALL: 16, FORK: 32, NPC: 64 };
 const DT = 1 / 60;
 let impacts = [], fragN = 0;
 
 export function resetWorld() {
+  G.people && G.people.reset(); G.vox && G.vox.reset();
   const w = PH.world = new CANNON.World({ gravity: new CANNON.Vec3(0, -18, 0) });
   w.broadphase = new CANNON.SAPBroadphase(w); w.allowSleep = true; w.solver.iterations = 8;
   PH.matD = new CANNON.Material('d'); PH.matP = new CANNON.Material('p');
@@ -24,9 +25,9 @@ export function resetWorld() {
 }
 // 부서지지 않는 고정 상자(벽·바닥). mat을 주면 그림도 만든다.
 export function solid(x, y, z, w, h, d, mat, o = {}) {
-  const b = new CANNON.Body({ mass: 0, material: PH.matD, collisionFilterGroup: o.group || GR.STATIC, collisionFilterMask: o.mask ?? (GR.PROP | GR.FRAG | GR.PLAYER) });
+  const b = new CANNON.Body({ mass: 0, material: PH.matD, collisionFilterGroup: o.group || GR.STATIC, collisionFilterMask: o.mask ?? (GR.PROP | GR.FRAG | GR.PLAYER | GR.NPC) });
   b.addShape(new CANNON.Box(new CANNON.Vec3(w / 2, h / 2, d / 2))); b.position.set(x, y, z); PH.world.addBody(b);
-  if (mat) { const m = bx(X.level, w, h, d, mat, x, y, z); if (o.noShadow) m.castShadow = false; if (o.block !== false) G.camBlock.push(m); return m; }
+  if (mat) { const m = bx(X.level, w, h, d, mat, x, y, z); if (o.noShadow) m.castShadow = false; if (o.block !== false) G.camBlock.push(m); if (G.vox && !o.group) G.vox.reg(b, m, x, y, z, w, h, d); return m; }
   return b;
 }
 export function later(ticks, fn) { G.timers.push({ t: G.tick + ticks, fn }); }
@@ -37,7 +38,7 @@ export function spawn(type, x, y, z, o = {}) {
   const g = new THREE.Group(); def.build(g, o, size); X.level.add(g);
   const body = new CANNON.Body({
     mass: fixed ? 0 : (o.mass || def.mass), material: PH.matD, allowSleep: true, sleepSpeedLimit: .3, sleepTimeLimit: .5, linearDamping: .06, angularDamping: .2,
-    collisionFilterGroup: kind === 'frag' ? GR.FRAG : GR.PROP, collisionFilterMask: kind === 'frag' ? (GR.STATIC | GR.PROP | GR.FORK) : (GR.STATIC | GR.PROP | GR.FRAG | GR.PLAYER | GR.FORK),
+    collisionFilterGroup: kind === 'frag' ? GR.FRAG : GR.PROP, collisionFilterMask: kind === 'frag' ? (GR.STATIC | GR.PROP | GR.FORK | GR.NPC) : (GR.STATIC | GR.PROP | GR.FRAG | GR.PLAYER | GR.FORK | GR.NPC),
   });
   // 자동차·지게차처럼 모양이 여러 개인 물건은 def.shapes가 직접 붙인다
   if (def.shapes) def.shapes(body, size, CANNON); else body.addShape(def.sphere ? new CANNON.Sphere(size[0] / 2) : new CANNON.Box(new CANNON.Vec3(size[0] / 2, size[1] / 2, size[2] / 2)));
@@ -59,6 +60,7 @@ function onCollide(e) {
   const p = e.target.p; if (!p || p.dead || p.hp == null || G.tick < G.settle || G.tick - p.born < 20) return;
   const v = Math.abs(e.contact.getImpactVelocityAlongNormal()); if (v < 3.5) return;
   const ob = e.body, q = ob.p;
+  if (ob.vw && G.vox) G.vox.bump(ob.vw, p, v);
   let k = 1;
   if (ob.isPlayer) k = .35; else if (q) { if (q.kind === 'frag') k = .25; else k = MATS[q.mat].hard * clamp(Math.sqrt(ob.mass / Math.max(.5, p.body.mass)), .35, 2.2); }
   if ((p.thrownT && G.tick - p.thrownT < 150) || (q && q.thrownT && G.tick - q.thrownT < 150)) k *= 1.7;
@@ -97,6 +99,8 @@ export function attack(c, r, dmg, imp, opt = {}) {
     if (out.length === 1) { fx.bitsAt(pt, opt.heavy ? 16 : 8, MATS[p.mat].bit, opt.heavy ? 4 : 2.5); fx.burst(pt, opt.heavy ? .45 : .28, false); }
     damage(p, dmg * k, pt, opt.heavy, true);
   }
+  // 벽도 뚫리고, 사람도 맞는다
+  if (G.vox && !out.some(p => p.fixed && !p.dead)) G.vox.hit(c, r, dmg, opt.heavy); if (G.people) G.people.hit(c, r, imp, opt);
   return out;
 }
 
@@ -159,6 +163,12 @@ function frags(p) {
     const mesh = bx(f.g, size[0], size[1], size[2], pick(fm)); mesh.castShadow = false; f.body.quaternion.copy(b.quaternion); fragN++;
   }
 }
+// 벽 조각 하나(물리 있음). 조각 수 상한은 물건 파편과 같이 센다
+export function chip(x, y, z, s, material, mat, v) {
+  if (fragN >= (G.mobile ? 60 : 120)) { const old = G.props.find(q => q.type === 'frag' && !q.dead); if (old) { toDebris(old); kill(old); fragN--; old.counted = true; } }
+  const f = spawn('frag', x, y, z, { size: [s, s, s], mass: clamp(s * s * s * 900, .1, 6), mat, life: rand(300, 460) | 0, v, av: { x: rand(-8, 8), y: rand(-8, 8), z: rand(-8, 8) } });
+  bx(f.g, s, s, s, material).castShadow = false; fragN++; return f;
+}
 const CMYK = ['#1aa7c7', '#d6338a', '#e8c41c', '#222222'];
 function spill(p) {
   const b = p.body.position, pos = { x: b.x, y: b.y, z: b.z };
@@ -202,6 +212,7 @@ export function explode(c, r, dmg, push) {
     const k = 1 - d / r * .6, l = d || 1; shove(p, dx / l * push * k, (dy / l + .7) * push * k, dz / l * push * k);
     if (dmg && p.hp != null) damage(p, dmg * k, bp, true);
   }
+  if (G.vox && dmg) G.vox.blast(c, r); if (G.people) G.people.blast(c, r, push);
   G.shake = Math.max(G.shake, .3);
 }
 
@@ -245,6 +256,7 @@ export function tick() {
       if (bp.y < -6) kill(p);
     } else if (bp.y < -30) kill(p);
   }
+  G.vox && G.vox.tick(); G.people && G.people.tick(dt);
   flush();
   fx.update(dt);
   if (G.comboT > 0 && --G.comboT === 0) G.combo = 0;

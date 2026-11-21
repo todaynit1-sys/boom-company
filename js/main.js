@@ -9,6 +9,8 @@ import { R, title, preview, startCourse, startSingle, startFree, startRush, goFl
 import { tickWorld } from './world.js';
 import { FLOOR_IDS } from './floors.js';
 import { TOY } from './toys.js';
+import './vox.js';
+import './people.js';
 import * as ui from './ui.js';
 import { unlock } from './audio.js';
 import { duckMusic, musicState } from './music.js';

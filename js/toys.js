@@ -118,7 +118,7 @@ function ram(R, b) {
 function forkTick(p, dt) {
   const b = p.body, [, h, d] = p.size;
   if (!p.fork) {
-    const fb = new CANNON.Body({ mass: 0, type: CANNON.Body.KINEMATIC, allowSleep: false, collisionFilterGroup: GR.FORK, collisionFilterMask: GR.PROP | GR.FRAG });
+    const fb = new CANNON.Body({ mass: 0, type: CANNON.Body.KINEMATIC, allowSleep: false, collisionFilterGroup: GR.FORK, collisionFilterMask: GR.PROP | GR.FRAG | GR.NPC });
     fb.material = PH.matD;
     for (const sx of [-1, 1]) fb.addShape(new CANNON.Box(new CANNON.Vec3(.06, .03, .55)), new CANNON.Vec3(sx * .3, 0, 0));
     fb.addShape(new CANNON.Box(new CANNON.Vec3(.39, .22, .03)), new CANNON.Vec3(0, .24, -.54));

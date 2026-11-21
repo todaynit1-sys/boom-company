@@ -49,7 +49,7 @@ export function snapshotFloor(carried) {
     const b = p.body, q = b.quaternion, { v, av, life, ...opt } = p.opt || {};
     extra.push([p.type, opt, b.position.x, b.position.y, b.position.z, q.x, q.y, q.z, q.w, p.hp]);
   }
-  return { gone, live, extra, fx: fx.snapshot() };
+  return { gone, live, extra, fx: fx.snapshot(), vox: G.vox ? G.vox.snap() : null };
 }
 export function applyFloor(s) {
   if (!s) return;
@@ -69,7 +69,7 @@ export function applyFloor(s) {
   for (const [type, opt, x, y, z, qx, qy, qz, qw, hp] of s.extra) {
     const p = spawn(type, x, y, z, opt); p.body.quaternion.set(qx, qy, qz, qw); if (hp != null) p.hp = hp; p.g.position.copy(p.body.position); p.g.quaternion.copy(p.body.quaternion); p.body.sleep();
   }
-  fx.restore(s.fx);
+  fx.restore(s.fx); if (G.vox && s.vox) G.vox.restore(s.vox);
   G.settle = G.tick + 90;
 }
 
@@ -87,7 +87,7 @@ export function elevatorBay(L, o = {}) {
   bx(L, .9, .02, .5, 'lightPanelOn', ex, 2.39, 9.95).castShadow = false; bx(L, 1.4, .05, .03, 'chrome', ex, .95, 10.75);
   bx(L, .08, gh + .08, .04, 'metalDark', ex - gw / 2 - .02, gh / 2, 8.98); bx(L, .08, gh + .08, .04, 'metalDark', ex + gw / 2 + .02, gh / 2, 8.98); bx(L, gw + .12, .08, .04, 'metalDark', ex, gh + .02, 8.98);
   const dL = bx(L, .6, gh - .02, .04, 'chrome', ex - .3, gh / 2, 9.1), dR = bx(L, .6, gh - .02, .04, 'chrome', ex + .3, gh / 2, 9.1);
-  const db = new CANNON.Body({ mass: 0, collisionFilterGroup: GR.STATIC, collisionFilterMask: GR.PROP | GR.FRAG | GR.PLAYER }); db.addShape(new CANNON.Box(new CANNON.Vec3(gw / 2, gh / 2, .05))); db.position.set(ex, gh / 2, 9.1); PH.world.addBody(db);
+  const db = new CANNON.Body({ mass: 0, collisionFilterGroup: GR.STATIC, collisionFilterMask: GR.PROP | GR.FRAG | GR.PLAYER | GR.NPC }); db.addShape(new CANNON.Box(new CANNON.Vec3(gw / 2, gh / 2, .05))); db.position.set(ex, gh / 2, 9.1); PH.world.addBody(db);
   G.elevDoors = { L: dL, R: dR, t: 0, target: 0, body: db };
   pl(L, .7, .22, textMat(o.label || '퇴근 ▼', { w: 256, h: 80, size: 46, bg: '#10151c', fg: '#6fe08a', lit: false }), ex, 2.55, 8.95, PI);
   bx(L, .1, .18, .03, 'metal', ex + .85, 1.2, 8.97);

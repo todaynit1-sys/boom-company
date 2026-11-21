@@ -1,5 +1,5 @@
 import { G, rand, clamp, lerp, angLerp } from './state.js';
-import { CHARS, look } from './data/chars.js';
+import { CHARS, NPCS, look } from './data/chars.js';
 import { DEFS } from './data/props.js';
 import { S } from './save.js';
 import { THREE, X, M, bx, colorMat, textMat, pl, canvasTex, speckle, labelMat, boxGeo, sphGeo, cylGeo, FONT } from './gfx.js';
@@ -132,7 +132,7 @@ function badgeMat(id) {
   return labelMat('badge' + id, 64, 96, (c, w, h) => {
     c.fillStyle = '#fff'; c.fillRect(0, 0, w, h); c.fillStyle = '#2f6bff'; c.fillRect(0, 0, w, 16);
     c.fillStyle = '#c9d3e6'; c.fillRect(16, 23, 32, 38); c.fillStyle = '#7b8aa6'; c.beginPath(); c.arc(32, 37, 9, 0, 7); c.fill(); c.fillRect(21, 49, 22, 12);
-    c.fillStyle = '#222'; c.font = '700 11px ' + FONT; c.textAlign = 'center'; c.fillText(CHARS[id].n, 32, 78); c.fillStyle = '#999'; c.fillRect(14, 85, 36, 3);
+    c.fillStyle = '#222'; c.font = '700 11px ' + FONT; c.textAlign = 'center'; c.fillText((CHARS[id] || NPCS[id]).n, 32, 78); c.fillStyle = '#999'; c.fillRect(14, 85, 36, 3);
   }, true);
 }
 
