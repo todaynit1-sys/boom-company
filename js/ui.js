@@ -179,7 +179,7 @@ export const promptBusy = () => pBusy;
 // wait = 참는 중(막대만), plain = 키 표시도 막대도 없는 안내(엘리베이터 들어가기 등)
 export function prompt(text, prog = 0, wait, plain) {
   const p = $('prompt'); pBusy = !!text; if (!text) { if (!p.classList.contains('soft')) show('prompt', false); return; }
-  show('prompt', true); p.classList.remove('soft'); p.firstElementChild.textContent = wait || plain ? text : (G.mobile ? '[행동] ' : '[E] ') + text;
+  show('prompt', true); p.classList.remove('soft'); const sp = p.firstElementChild; sp.textContent = text; if (!(wait || plain)) { const k = document.createElement('b'); k.textContent = G.mobile ? '행동' : 'E'; sp.prepend(k); }
   const b = p.lastElementChild; b.style.display = !plain && (prog > 0 || wait) ? 'block' : 'none'; b.firstElementChild.style.width = Math.min(100, prog * 100) + '%';
 }
 export function hint(text, prog = 0) {

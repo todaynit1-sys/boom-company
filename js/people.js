@@ -3,7 +3,7 @@
 import { X } from './gfx.js';
 import { G, rand, pick, clamp, won, angLerp } from './state.js';
 import { PH, GR, CANNON, addCombo } from './engine.js';
-import { buildRig, poseRig, faceTex, P } from './player.js';
+import { buildRig, poseRig, faceTex, seatOf, P } from './player.js';
 import { NPCS } from './data/chars.js';
 import * as fx from './fx.js';
 import { sfx, buzz } from './audio.js';
@@ -41,15 +41,22 @@ function stand(n, x, z) {
 }
 
 // avoid = [[x, z, 반경], …] 처음에 비워 둘 자리(내 자리·엘리베이터 앞)
+// 사무실 층: 남의 자리 의자 몇 개에 동료가 앉아 일한다
+const WORKERS = ['w1', 'w2', 'w3', 'w4'];
+const upright = p => { const q = p.body.quaternion; return 1 - 2 * (q.x * q.x + q.z * q.z) > .9 && Math.abs(p.body.position.y - p.size[1] / 2) < .1; };
+function seats() { return G.props.filter(p => !p.dead && p.type === 'chair' && upright(p) && /^d[0-9]+_Chair$/.test(p.tag || '')).sort(() => Math.random() - .5).slice(0, WORKERS.length); }
 export function spawnPeople(floor, avoid = []) {
   reset();
-  for (const id of CAST[floor] || []) {
-    const pt = freeSpot(avoid); if (!pt) continue;
+  const sit = floor === 'office' ? seats() : [], cast = (CAST[floor] || []).concat(WORKERS.slice(0, sit.length));
+  for (const id of cast) {
+    const wi = WORKERS.indexOf(id), chair = wi >= 0 ? sit[wi] : null, so = chair && seatOf(chair);
+    const pt = so ? { x: so.x, z: so.z } : freeSpot(avoid); if (!pt) continue;
     const R = rigs[id] || (rigs[id] = buildRig(id, null, NPCS[id].g)); X.scene.add(R.root); R.root.visible = true; R.shown = null;
     const body = new CANNON.Body({ mass: 0, type: CANNON.Body.KINEMATIC, material: PH.matD, allowSleep: false, linearDamping: .08, angularDamping: .35, collisionFilterGroup: GR.NPC, collisionFilterMask: GR.PROP | GR.FRAG | GR.FORK });
     body.addShape(new CANNON.Box(new CANNON.Vec3(.24, .82, .17)));
     const n = { id, d: NPCS[id], R, body, yaw: rand(6.28), st: 'idle', t: 0, walk: 0, spd: 0, hits: 0, kt: -99, think: rand(60, 200) | 0, nagT: rand(200, 500) | 0, scared: 0, tgt: null, pend: null, out: false };
     body.npc = n; stand(n, pt.x, pt.z); n.home = [pt.x, pt.z]; face(n, 'normal');
+    if (chair) { n.st = 'sit'; n.chair = chair; n.yaw = so.yaw; body.quaternion.setFromEuler(0, n.yaw, 0); body.collisionFilterMask = 0; n.sx = so.x; n.sz = so.z; }
     body.addEventListener('collide', e => {
       if (n.st === 'fly' || n.st === 'down' || G.tick < G.settle) return; const ob = e.body; if (ob.isPlayer || ob.npc) return;
       if (ob.p && ob.p.kind === 'frag') return;
@@ -64,6 +71,7 @@ function knock(n, vx, vy, vz) {
   const air = n.st === 'fly' || n.st === 'down';
   if (air && G.tick - n.kt < 10) return false;
   const b = n.body; n.kt = G.tick; n.hits++; n.tgt = null;
+  n.chair = null;
   if (!air) { b.type = CANNON.Body.DYNAMIC; b.mass = 55; b.updateMassProperties(); b.collisionFilterMask = GR.STATIC | GR.PROP | GR.FRAG | GR.FORK; }
   b.wakeUp(); b.velocity.set(clamp(vx, -16, 16), clamp(vy, 2.5, 13), clamp(vz, -16, 16)); b.angularVelocity.set(rand(-9, 9), rand(-4, 4), rand(-9, 9));
   n.st = 'fly'; n.t = 0; face(n, 'endure');
@@ -108,6 +116,11 @@ function tick(dt) {
     } else if (n.st === 'down') {
       if (n.t === 30) fx.text(head(n), '@_@', 'word');
       if (n.t > 120) { n.out = false; stand(n, clamp(bp.x, -12.6, 12.6), clamp(bp.z, -8.1, 7.8)); n.st = 'dizzy'; n.t = 0; n.scared = 900; }
+    } else if (n.st === 'sit') {
+      // 의자가 없어지거나 밀려났거나, 내가 바로 옆에서 난동을 부리면 벌떡 일어나 달아난다
+      const c = n.chair, cp = c && !c.dead ? c.body.position : null, dp = pp ? Math.hypot(pp.x - bp.x, pp.z - bp.z) : 99;
+      if (!cp || !upright(c) || Math.hypot(cp.x - n.sx, cp.z - n.sz) > .7 || (dp < 2.6 && G.combo > 2)) { n.chair = null; stand(n, bp.x, bp.z); n.st = 'idle'; n.scared = 900; n.nagT = 0; fx.text(head(n), pick(['으악!', '뭐야 뭐야!', '도망쳐!']), 'say'); }
+      else if (n.nagT > 0) n.nagT--; else if (dp < 2.4) { fx.text(head(n), n.d.n + ': ' + pick(n.d.lines), 'say'); n.nagT = rand(500, 800) | 0; }
     } else if (n.st === 'dizzy') {
       n.spd = 0; if (n.t > 70) { n.st = 'idle'; face(n, 'normal'); }
     } else {
@@ -143,7 +156,7 @@ function tick(dt) {
     lv.set(0, -HY, 0); b.quaternion.vmult(lv, wv);
     R.root.position.set(bp.x + wv.x, bp.y + wv.y, bp.z + wv.z); R.root.quaternion.copy(b.quaternion);
     if (n.st === 'dizzy') R.root.rotation.z = Math.sin(n.t * .3) * .08;
-    poseRig(R, { walk: n.walk, speed: clamp(n.spd / 5.5, 0, 1.2), air: n.st === 'fly', t: G.tick / 60 });
+    poseRig(R, { walk: n.walk, speed: clamp(n.spd / 5.5, 0, 1.2), air: n.st === 'fly', t: G.tick / 60, seated: n.st === 'sit', typing: n.st === 'sit' });
   }
 }
 function reset() { for (const n of list) { if (n.R.root.parent) n.R.root.parent.remove(n.R.root); if (PH.world && n.body.world) PH.world.removeBody(n.body); } list.length = 0; }

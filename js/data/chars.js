@@ -33,6 +33,10 @@ export const NPCS = {
   insa: { n: '인사팀 과장', g: 'm', skin: '#e6b48f', hairCol: '#1b1714', hair: 'short', glasses: true, top: 'suit', suit: '#3d4a3f', shirt: '#f4f2ec', tie: '#2a3a2e', pants: '#2b2f3a', shoes: '#18181a', badge: true, build: .97, lines: ['연차는 반려입니다', '근태 확인 좀 하죠', '평가 기간인 거 알죠?'] },
   sajang: { n: '사장님', g: 'm', skin: '#cf9a74', hairCol: '#8a857e', hair: 'slick', top: 'suit', suit: '#1b1d22', shirt: '#f4f2ec', tie: '#e3b23c', pants: '#1b1d22', shoes: '#18181a', badge: false, belly: true, build: 1.1, lines: ['우리는 가족이야', '열정! 도전! 혁신!', '월급은 마음으로 받는 걸세'] },
   sangmu: { n: '상무님', g: 'm', skin: '#d5a07b', hairCol: '#4a4540', hair: 'short', top: 'suit', suit: '#1d2a44', shirt: '#eef0f3', tie: '#24448a', pants: '#1d2a44', shoes: '#18181a', badge: true, build: 1.04, lines: ['자네 이름이 뭐였지?', '골프는 좀 치나?', '내가 왕년에는 말이야'] },
+  w1: { n: '옆자리 동기', g: 'f', skin: '#f1cdb1', hairCol: '#3a2a22', hair: 'pony', glasses: true, top: 'blazer', suit: '#d9c9a8', shirt: '#ffffff', tie: null, pants: '#3a3e45', shoes: '#2a1f1a', badge: true, build: .95, lines: ['나 지금 바빠…', '점심 뭐 먹지', '오늘도 야근이래'] },
+  w2: { n: '박 대리', g: 'm', skin: '#e6b48f', hairCol: '#1b1714', hair: 'short', top: 'suit', suit: '#e9e6df', shirt: '#e9e6df', tie: '#24448a', pants: '#2b2f3a', shoes: '#18181a', badge: true, build: 1.02, lines: ['아 퇴근하고 싶다', '이거 누가 시킨 거야', '커피 한 잔 할래?'] },
+  w3: { n: '신입 사원', g: 'm', skin: '#efc6a3', hairCol: '#2b211a', hair: 'mop', top: 'hoodie', suit: '#5f8f6a', shirt: '#f4f2ec', tie: null, pants: '#3a5a86', shoes: '#e9e6df', badge: true, build: .95, lines: ['이거 어떻게 하는 거죠…', '네! 알겠습니다!', '선배님 살려 주세요'] },
+  w4: { n: '최 주임', g: 'f', skin: '#f2cbab', hairCol: '#241b17', hair: 'bob', top: 'blazer', suit: '#5a6f9a', shirt: '#ffffff', tie: null, pants: '#2b2f3a', shoes: '#1d1414', badge: true, build: .95, lines: ['메일 확인 부탁드려요', '회의 또 잡혔네', '월요일 싫다'] },
   gap: { n: '거래처 김 사장', g: 'm', skin: '#c78d66', hairCol: '#2a211a', hair: 'slick', sun: true, top: 'aloha', suit: '#2f6bff', shirt: '#2f6bff', tie: null, pants: '#e9e1cf', shoes: '#7a5532', badge: false, belly: true, build: 1.08, lines: ['단가 좀 깎지?', '오늘 접대 있지?', '갑이 누군지 알지?'] },
 };
 export const ACCS = [

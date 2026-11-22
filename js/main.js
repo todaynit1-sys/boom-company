@@ -114,7 +114,23 @@ function bot() {
 // ───── 루프
 let acc = 0, lastT = 0;
 function step() { pollKeys(); if (G.auto) bot(); tick(); tickWorld(); }
-function draw(dt) { renderPlayer(dt); const hc = P.active && !G.paused && R.mode !== 'title' ? (P.cand && !P.cand.dead ? P.cand : G.want && !G.want.dead && !G.want.held ? G.want : null) : null; highlight(hc ? hc.g : null); render(); fx.drawTexts(W, H); flashEl.style.opacity = G.flash > 0 && !G.calm ? Math.min(.7, G.flash / 8) : 0; }
+// 안내 말풍선을 대상 물건 위에 띄운다(대상이 없으면 원래 자리인 화면 아래 가운데)
+const promptEl = document.getElementById('prompt'), pv = { x: 0, y: 0, z: 0 }; let floated = false;
+function floatPrompt(hc) {
+  if (hc && X.camera && !promptEl.classList.contains('off')) {
+    X.camera.updateMatrixWorld();
+    const bp = hc.body.position, e = X.camera.matrixWorldInverse.elements, pe = X.camera.projectionMatrix.elements, wx = bp.x, wy = bp.y + hc.size[1] / 2 + .22, wz = bp.z;
+    const vx = e[0] * wx + e[4] * wy + e[8] * wz + e[12], vy = e[1] * wx + e[5] * wy + e[9] * wz + e[13], vz = e[2] * wx + e[6] * wy + e[10] * wz + e[14], vw = e[3] * wx + e[7] * wy + e[11] * wz + e[15];
+    const cw = pe[3] * vx + pe[7] * vy + pe[11] * vz + pe[15] * vw;
+    if (cw > .05) {
+      const nx = (pe[0] * vx + pe[4] * vy + pe[8] * vz + pe[12] * vw) / cw, ny = (pe[1] * vx + pe[5] * vy + pe[9] * vz + pe[13] * vw) / cw;
+      const hw = promptEl.offsetWidth / 2 + 8, x = Math.max(hw, Math.min(W - hw, (nx * .5 + .5) * W)), y = Math.max(120, Math.min(H - (G.mobile ? 300 : 120), (-ny * .5 + .5) * H));
+      promptEl.style.left = x + 'px'; promptEl.style.top = y + 'px'; promptEl.style.bottom = 'auto'; promptEl.style.transform = 'translate(-50%,-100%)'; floated = true; return;
+    }
+  }
+  if (floated) { promptEl.style.left = promptEl.style.top = promptEl.style.bottom = promptEl.style.transform = ''; floated = false; }
+}
+function draw(dt) { renderPlayer(dt); const hc = P.active && !G.paused && R.mode !== 'title' ? (P.cand && !P.cand.dead ? P.cand : G.want && !G.want.dead && !G.want.held ? G.want : null) : null; highlight(hc ? hc.g : null); let pt = hc; if (ui.promptBusy()) { pt = null; try { const a = MS.step && MS.step.at && MS.step.at(); if (a && a.body && !a.dead) pt = a; } catch (e) { } } floatPrompt(pt); render(); fx.drawTexts(W, H); flashEl.style.opacity = G.flash > 0 && !G.calm ? Math.min(.7, G.flash / 8) : 0; }
 function frame(t) {
   const dt = Math.min(100, t - lastT); lastT = t;
   // 한 번 틀려도 게임이 멈추지 않게: 오류는 기록만 하고 다음 틱으로 넘어간다
