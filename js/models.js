@@ -4,10 +4,10 @@ import { THREE } from './gfx.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DEFS } from './data/props.js';
 
-const NAMES = ['desk', 'chair', 'cabinet', 'plant', 'sofa', 'table', 'trash'];
+const NAMES = ['desk', 'chair', 'cabinet', 'plant', 'sofa', 'table', 'trash', 'watercooler', 'partition', 'lowcab', 'bookshelf', 'fridge', 'cafetable', 'cafechair', 'stool', 'foldchair', 'bench'];
 const MODELS = {}, tint = {};
 // 색을 바꿔 쓰는 물건(소파)의 천 재질
-const TINT = { sofa: 'sofaFabric' };
+const TINT = { sofa: 'sofaFabric', stool: 'stoolSeat' };
 
 function place(g, name, o, size) {
   const src = MODELS[name]; if (!src) return false;
@@ -18,7 +18,7 @@ function place(g, name, o, size) {
 }
 export async function loadModels() {
   const loader = new GLTFLoader();
-  await Promise.all(NAMES.map(n => loader.loadAsync('assets/models/' + n + '.glb?v=2').then(gl => {
+  await Promise.all(NAMES.map(n => loader.loadAsync('assets/models/' + n + '.glb?v=3').then(gl => {
     gl.scene.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
     MODELS[n] = gl.scene;
   }).catch(() => { })));

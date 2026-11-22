@@ -268,3 +268,4 @@ body.phone-l #obj{top:62px}body.phone-l .h-left{max-width:30vw}
 @media (max-width:900px){.h-mid:before,.h-right b:before{display:none}.h-mid .bar{min-width:60px}}
 body.phone-l .h-left,body.phone-l .h-right{padding:4px 10px 5px}body.phone-l #obj,body.phone-l #elev{top:70px}
 body.phone-p #status{bottom:200px}
+.h-left{flex:0 0 auto;max-width:42vw}

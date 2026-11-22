@@ -209,6 +209,143 @@ def trash():
     export('trash')
 
 
-for f in (desk, chair, cabinet, plant, sofa, table, trash):
+# ───── 정수기 .34 × 1.3 × .34  (물 나오는 곳이 +z 쪽)
+def watercooler():
+    reset()
+    body, dark, bottle, cap = mat('coolerBody', '#eef0f2', .4), mat('plasticDark', '#2a2c31', .5), mat('coolerWater', '#7fb8ea', .08), mat('coolerCap', '#2f6bff', .4)
+    box(0, -.27, 0, .32, .76, .32, body, .03, 4)
+    box(0, .1, 0, .3, .02, .3, mat('chrome', '#cfd3d8', .25, 1), .006)
+    box(0, -.1, .162, .2, .16, .01, dark, .02, 3)
+    for s in (-1, 1):
+        box(s * .045, -.06, .175, .03, .04, .03, mat('tap' + ('C' if s < 0 else 'H'), '#2f6bff' if s < 0 else '#d6402f', .35), .008)
+    box(0, -.2, .17, .14, .02, .06, dark, .006)
+    cyl(0, .35, 0, .14, .14, .44, bottle, 28, .03)
+    cyl(0, .12, 0, .07, .14, .06, bottle, 28)
+    cyl(0, .58, 0, .05, .05, .04, cap, 20, .006)
+    export('watercooler')
+
+
+# ───── 파티션 1.6 × 1.15 × .06
+def partition():
+    reset()
+    w, h, d = 1.6, 1.15, .06
+    fab, frame = mat('partFabric', '#8f99a6', .95), mat('partFrame', '#c9ccd1', .4, .3)
+    box(0, 0, 0, w - .04, h - .04, d - .01, fab, .01)
+    box(0, h / 2 - .02, 0, w, .04, d, frame, .012)
+    for s in (-1, 1):
+        box(s * (w / 2 - .02), -.02, 0, .04, h - .04, d, frame, .012)
+        box(s * (w / 2 - .12), -h / 2 + .015, 0, .05, .03, .3, frame, .01)
+    export('partition')
+
+
+# ───── 낮은 수납장 .9 × .75 × .42  (문이 +z)
+def lowcab():
+    reset()
+    w, h, d = .9, .75, .42
+    body, door, top, metal = mat('deskLeg', '#e9e6df', .55), mat('deskLam', '#e3dfd6', .6), mat('deskTop', '#d9b98a', .45), mat('chrome', '#cfd3d8', .25, 1)
+    box(0, -.02, 0, w, h - .04, d, body, .014)
+    box(0, h / 2 - .02, 0, w + .02, .04, d + .02, top, .012)
+    for s in (-1, 1):
+        box(s * (w / 4), -.03, d / 2 + .004, w / 2 - .02, h - .12, .012, door, .006)
+        box(s * .05, .05, d / 2 + .016, .015, .1, .015, metal, .005)
+    export('lowcab')
+
+
+# ───── 책장 1.6 × 2.1 × .4  (열린 쪽 +z)
+def bookshelf():
+    reset()
+    random.seed(11)
+    w, h, d = 1.6, 2.1, .4
+    wood = mat('woodDark', '#5b3b24', .5)
+    box(0, 0, -d / 2 + .01, w, h, .02, wood, .004)
+    for s in (-1, 1):
+        box(s * (w / 2 - .015), 0, 0, .03, h, d, wood, .006)
+    shelves = 5
+    for i in range(shelves + 1):
+        y = -h / 2 + .015 + i * (h - .03) / shelves
+        box(0, y, 0, w - .03, .03, d, wood, .004)
+    cols = ['#7a2030', '#1f3f6b', '#2f5f3a', '#c9a24a', '#e9e1cf', '#3a2a22', '#5a3e8a', '#2f6bff', '#e3b23c']
+    for i in range(shelves):
+        y0 = -h / 2 + .03 + i * (h - .03) / shelves
+        x = -w / 2 + .05
+        while x < w / 2 - .1:
+            bw, bh = random.uniform(.03, .06), random.uniform(.24, .34)
+            if random.random() < .12:
+                x += .08; continue
+            box(x + bw / 2, y0 + bh / 2, .02, bw, bh, d - .1, mat('book' + str(cols.index(c := random.choice(cols))), c, .7), .004, 2)
+            x += bw + .003
+    export('bookshelf')
+
+
+# ───── 냉장고 .65 × 1.75 × .65  (문이 +z)
+def fridge():
+    reset()
+    w, h, d = .65, 1.75, .65
+    body, metal = mat('fridgeBody', '#e9ebee', .3, .1), mat('chrome', '#cfd3d8', .25, 1)
+    box(0, 0, 0, w, h, d - .02, body, .03, 4)
+    box(0, .48, d / 2 - .005, w - .02, .76, .02, body, .012)
+    box(0, -.39, d / 2 - .005, w - .02, .94, .02, body, .012)
+    box(-w / 2 + .07, .2, d / 2 + .02, .03, .3, .03, metal, .012)
+    box(-w / 2 + .07, -.12, d / 2 + .02, .03, .3, .03, metal, .012)
+    export('fridge')
+
+
+# ───── 카페 테이블 .7 × .74 × .7 / 카페 의자 .44 × .86 × .44 / 스툴 .34 × .46 × .34
+def cafetable():
+    reset()
+    top, metal = mat('deskTop', '#d9b98a', .45), mat('tableLeg', '#2d3036', .4, .7)
+    cyl(0, .35, 0, .35, .35, .04, top, 40, .012)
+    cyl(0, 0, 0, .03, .03, .66, metal, 16)
+    cyl(0, -.355, 0, .22, .24, .03, metal, 32, .008)
+    export('cafetable')
+
+
+def cafechair():
+    reset()
+    wood, metal = mat('woodWarm', '#b9875a', .5), mat('tableLeg', '#2d3036', .4, .7)
+    box(0, .02, .02, .42, .04, .4, wood, .015)
+    box(0, .26, -.19, .4, .2, .03, wood, .012, 4, rot=(math.radians(-8), 0, 0))
+    for x in (-1, 1):
+        for z in (-1, 1):
+            cyl(x * .17, -.21, z * .16, .015, .015, .44, metal, 10)
+        cyl(x * .17, .14, -.19, .013, .013, .26, metal, 10)
+    export('cafechair')
+
+
+def stool():
+    reset()
+    seat, metal = mat('stoolSeat', '#c9281f', .5), mat('chrome', '#cfd3d8', .25, 1)
+    cyl(0, .2, 0, .17, .16, .06, seat, 28, .02)
+    for k in range(4):
+        a = k * math.tau / 4 + math.pi / 4
+        cyl(math.sin(a) * .11, -.05, math.cos(a) * .11, .012, .012, .44, metal, 10, rot=(math.cos(a) * .12, -math.sin(a) * .12, 0))
+    cyl(0, -.1, 0, .12, .12, .012, metal, 24)
+    export('stool')
+
+
+# ───── 접이식 의자 .44 × .82 × .44 / 벤치 1.6 × .45 × .48
+def foldchair():
+    reset()
+    seat, metal = mat('plasticDark', '#2a2c31', .5), mat('chrome', '#cfd3d8', .25, 1)
+    box(0, .02, .03, .4, .03, .38, seat, .012)
+    box(0, .26, -.19, .38, .2, .02, seat, .012, 4, rot=(math.radians(-6), 0, 0))
+    for s in (-1, 1):
+        box(s * .2, -.2, 0, .02, .44, .02, metal, .006, 2, rot=(math.radians(18), 0, 0))
+        box(s * .2, -.2, 0, .02, .44, .02, metal, .006, 2, rot=(math.radians(-18), 0, 0))
+        box(s * .2, .2, -.2, .02, .4, .02, metal, .006)
+    export('foldchair')
+
+
+def bench():
+    reset()
+    wood, metal = mat('woodWarm', '#b9875a', .5), mat('tableLeg', '#2d3036', .4, .7)
+    for i in range(4):
+        box(0, .2, -.18 + i * .12, 1.6, .03, .1, wood, .01)
+    for s in (-1, 1):
+        box(s * .65, -.02, 0, .05, .42, .44, metal, .01)
+    export('bench')
+
+
+for f in (desk, chair, cabinet, plant, sofa, table, trash, watercooler, partition, lowcab, bookshelf, fridge, cafetable, cafechair, stool, foldchair, bench):
     f()
 print('done')
