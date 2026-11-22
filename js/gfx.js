@@ -214,7 +214,7 @@ const TIMES = {
 export function setTime(t) {
   const T = TIMES[t] || TIMES.day; X.time = t;
   X.sun.intensity = T.sun; X.sun.color.set(T.sunCol); X.sun.position.set(T.pos[0], T.pos[1], T.pos[2]).multiplyScalar(1.6); X.sun.shadow.autoUpdate = T.sun > 0; X.hemi.intensity = T.hemi;
-  X.fill.intensity = T.fill; X.fill.color.set(T.fillCol || '#fff4e2'); X.scene.fog.color.set(T.bg); X.scene.fog.density = T.fog; drawShafts(); X.renderer.toneMappingExposure = T.exp; X.scene.background = new THREE.Color(SKYP[t] ? SKYP[t][0] : T.bg); X.scene.environmentIntensity = T.env;
+  X.fill.intensity = T.fill; X.fill.color.set(T.fillCol || '#ffeed6'); X.scene.fog.color.set(T.bg); X.scene.fog.density = T.fog; drawShafts(); X.renderer.toneMappingExposure = T.exp; X.scene.background = new THREE.Color(SKYP[t] ? SKYP[t][0] : T.bg); X.scene.environmentIntensity = T.env;
   const lp = M('lightPanel'); lp.emissiveIntensity = T.panel; lp.color.set(T.panel < .5 ? '#77756f' : '#ffffff');
   X.lamps.forEach(l => { l.intensity = T.lamp * l.userData.base; });
   if (X.sky) X.sky.material.map = skyTex(t);

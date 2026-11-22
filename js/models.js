@@ -18,7 +18,7 @@ function place(g, name, o, size) {
 }
 export async function loadModels() {
   const loader = new GLTFLoader();
-  await Promise.all(NAMES.map(n => loader.loadAsync('assets/models/' + n + '.glb?v=3').then(gl => {
+  await Promise.all(NAMES.map(n => loader.loadAsync('assets/models/' + n + '.glb?v=4').then(gl => {
     gl.scene.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
     MODELS[n] = gl.scene;
   }).catch(() => { })));

@@ -103,6 +103,14 @@ def desk():
         box(px, y, d / 2 - .045, .36, .14 if i < 2 else .16, .012, leg, .006)
         box(px, y + .03, d / 2 - .034, .12, .012, .014, metal, .004)
     cyl(-w / 2 + .3, h / 2 + .001, -d / 2 + .14, .03, .03, .004, dark, 20)
+    # 책상 위 소품: 연필꽂이(오른쪽 뒤), 탁상 달력(왼쪽 뒤)
+    ty = h / 2
+    cyl(.4, ty + .05, -.29, .035, .032, .1, mat('penCup', '#3d4652', .5), 20, .004)
+    for i, (c, dx, dz) in enumerate((('#e5342b', -.01, .005), ('#2f6bff', .012, -.008), ('#f2c23a', .004, .012), ('#2a2c31', -.012, -.01))):
+        cyl(.4 + dx, ty + .12, -.29 + dz, .005, .005, .14, mat('pen' + str(i), c, .4), 8, rot=(dz * 6, dx * 6, 0))
+    box(-.38, ty + .055, -.28, .15, .1, .012, mat('calPage', '#fbfaf5', .8), .002, 1, rot=(math.radians(-18), 0, 0))
+    box(-.38, ty + .055, -.3, .15, .1, .012, mat('calBack', '#2f5fb3', .6), .002, 1, rot=(math.radians(18), 0, 0))
+    box(-.38, ty + .095, -.28, .15, .02, .014, mat('calTop', '#e5342b', .5), .002, 1, rot=(math.radians(-18), 0, 0))
     export('desk')
 
 
@@ -235,6 +243,12 @@ def partition():
     for s in (-1, 1):
         box(s * (w / 2 - .02), -.02, 0, .04, h - .04, d, frame, .012)
         box(s * (w / 2 - .12), -h / 2 + .015, 0, .05, .03, .3, frame, .01)
+    # 책상 쪽(+z) 면에 붙인 메모지와 출력물
+    for i, (x, y, c) in enumerate(((-.45, .32, '#ffe66d'), (-.36, .28, '#ff9fb2'), (-.4, .18, '#9be7a1'), (.42, .3, '#ffe66d'))):
+        box(x, y, d / 2 + .002, .075, .075, .003, mat('note' + str(i), c, .8), .001, 1, rot=(0, math.radians(random.uniform(-8, 8)), 0))
+    box(.1, .26, d / 2 + .002, .21, .28, .003, mat('printout', '#fbfaf5', .8), .001, 1)
+    for k in range(5):
+        box(.1, .34 - k * .04, d / 2 + .004, .15, .008, .002, mat('printLine', '#9aa0a8', .8), 0, 1)
     export('partition')
 
 
