@@ -8,7 +8,7 @@ export const CHARS = {
   lee: { n: '이주임', rankName: '주임', desc: '던지기 달인 · 서류 폭풍', g: 'f', skin: '#f1cdb1', hairCol: '#241b17', hair: 'bob', glasses: true, top: 'blazer', suit: '#2d7350', shirt: '#ffffff', tie: null, pants: '#2b2f3a', shoes: '#2a1f1a', badge: true,
     m: { hair: 'short', skin: '#ecc3a3' },
     spd: 5.4, jump: 6.6, pow: .9, rate: 1.1, build: .95, thr: 1.5, sp: { type: 'storm', name: '서류 폭풍' }, rank: 0 },
-  kim: { n: '김대리', rankName: '대리', desc: '균형형 · 무난하게 다 잘함', g: 'm', skin: '#e6b48f', hairCol: '#1b1714', hair: 'short', top: 'suit', suit: '#26457f', shirt: '#f4f2ec', tie: '#c22b23', pants: '#232838', shoes: '#18181a', badge: true,
+  kim: { n: '김대리', rankName: '대리', desc: '균형형 · 무난하게 다 잘함', g: 'm', skin: '#e6b48f', hairCol: '#1b1714', hair: 'short', top: 'suit', suit: '#2a3358', shirt: '#f4f2ec', tie: '#c22b23', pants: '#2a3358', shoes: '#18181a', badge: true,
     f: { hair: 'long', hairCol: '#2a1d17', skin: '#ecc0a0', tie: null, scarf: '#c22b23', shirt: '#ffffff', skirt: true, pants: '#26457f', legs: '#e1b698', shoes: '#1d1414', heels: true },
     spd: 5.4, jump: 6.6, pow: 1, rate: 1, build: 1, sp: { type: 'quake', n: 1, dmg: 45, slow: true, name: '책상 쾅' }, rank: 0 },
   choi: { n: '최과장', rankName: '과장', desc: '느리지만 한 방이 큼', g: 'm', skin: '#d5a07b', hairCol: '#6d665f', hair: 'bald', top: 'suit', suit: '#555a61', shirt: '#eef0f3', tie: '#24448a', pants: '#3a3e45', shoes: '#18181a', badge: true, belly: true,

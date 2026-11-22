@@ -190,9 +190,9 @@ export function buildRig(id, acc, g) {
   const hairM = new THREE.MeshStandardMaterial({ color: ch.hairCol, roughness: .55, side: THREE.DoubleSide }), sleeve = colorMat(ch.suit, .82);
   const jacket = ch.top === 'suit' || ch.top === 'blazer', legM = ch.skirt ? colorMat(ch.legs, .5) : pants;
   // 몸 치수: 여자는 다리가 조금 짧고 어깨가 좁다
-  const thL = F ? .385 : .4, shL = F ? .38 : .39, hipX = F ? .082 : .088, shX = F ? .166 : .186, ua = F ? [.039, .034, .27] : [.045, .039, .285], fa = F ? [.035, .029, .235] : [.04, .034, .245];
+  const thL = F ? .31 : .32, shL = F ? .305 : .315, hipX = F ? .082 : .088, shX = F ? .166 : .186, ua = F ? [.039, .034, .27] : [.045, .039, .285], fa = F ? [.035, .029, .235] : [.04, .034, .245];
   // 다리
-  const hips = R.hips = grp(root, 0, R.hipY = F ? .885 : .91, 0);
+  const hips = R.hips = grp(root, 0, R.hipY = F ? .735 : .755, 0);
   if (!ch.skirt) { mesh(hips, limbGeo(F ? .132 : .138, F ? .128 : .13, .17), pants, 0, -.035, 0).scale.z = .8; mesh(hips, sphGeo(.07, 14), pants, 0, -.17, 0).scale.set(1.2, .8, .9); }
   for (const s of [-1, 1]) {
     const k = s < 0 ? 'L' : 'R', hip = grp(hips, s * hipX, -.07, 0), knee = grp(hip, 0, -thL, 0), ank = grp(knee, 0, -shL, 0);
@@ -200,7 +200,7 @@ export function buildRig(id, acc, g) {
     mesh(knee, sphGeo(F ? .05 : .056, 12), legM); mesh(knee, limbGeo(F ? .05 : .056, F ? .035 : .042, shL), legM);
     if (ch.heels) { mesh(ank, boxGeo(.078, .014, .22, .005), sole, 0, -.038, .055); mesh(ank, boxGeo(.076, .05, .2, .024), shoe, 0, -.012, .055); mesh(ank, boxGeo(.032, .046, .034, .005), shoe, 0, -.034, -.045); }
     else { mesh(ank, boxGeo(F ? .086 : .096, .024, F ? .25 : .27, .008), sole, 0, -.048, .045); mesh(ank, boxGeo(F ? .082 : .092, .062, F ? .22 : .24, .03), shoe, 0, -.012, .04); }
-    R['hip' + k] = hip; R['knee' + k] = knee; R['ank' + k] = ank;
+    hip.scale.set(1.16, 1, 1.16); R['hip' + k] = hip; R['knee' + k] = knee; R['ank' + k] = ank;
   }
   if (ch.skirt) { const sg = new THREE.CylinderGeometry(.138, .2, .4, 24, 1, true, Math.PI, Math.PI * 2); sg.translate(0, -.2, 0); const sk = R.skirt = mesh(hips, sg, new THREE.MeshStandardMaterial({ color: ch.pants, roughness: .82, side: THREE.DoubleSide }), 0, -.07, 0); sk.scale.z = .8; }
   // 몸통
@@ -220,14 +220,14 @@ export function buildRig(id, acc, g) {
     const k = s < 0 ? 'L' : 'R', sh = grp(sp, s * shX, .45, 0), el = grp(sh, 0, -ua[2], 0), hd = grp(el, 0, -(fa[2] + .01), 0);
     if (ch.top === 'aloha') { mesh(sh, limbGeo(ua[0] + .006, ua[1] + .01, .15), sleeve); mesh(sh, limbGeo(ua[0] - .005, ua[1] - .003, ua[2]), skin); mesh(el, sphGeo(fa[0] - .004, 12), skin); mesh(el, limbGeo(fa[0] - .004, fa[1] - .003, fa[2]), skin); }
     else { mesh(sh, limbGeo(ua[0], ua[1], ua[2]), sleeve); mesh(el, sphGeo(fa[0], 12), sleeve); mesh(el, limbGeo(fa[0], fa[1], fa[2]), sleeve); if (jacket) mesh(el, limbGeo(fa[1] + .001, fa[1] + .001, .025), shirt, 0, -fa[2] + .017, 0); }
-    if (F) hd.scale.setScalar(.88);
+    hd.scale.setScalar(F ? 1.3 : 1.45);
     mesh(hd, boxGeo(.03, .085, .074, .013), skin, 0, -.045, .004);
     const fg = grp(hd, 0, -.086, .002); mesh(fg, boxGeo(.026, .07, .07, .012), skin, 0, -.032, 0);
     const th = grp(hd, -s * .006, -.032, .036); mesh(th, boxGeo(.022, .052, .022, .009), skin, 0, -.02, 0); th.rotation.set(-.35, 0, s * .25);
     R['sh' + k] = sh; R['el' + k] = el; R['hand' + k] = hd; R['fing' + k] = fg;
   }
   // 머리
-  const head = R.head = grp(sp, 0, .72, .008); head.scale.setScalar(F ? 1.46 : 1.5); head.position.y = .772;
+  const head = R.head = grp(sp, 0, .72, .008); { const S = F ? 1.66 : 1.72; sp.scale.set(1.12, 1, 1.14); head.scale.set(S / 1.12, S, S / 1.14); head.position.y = .795; }
   mesh(head, shell('head', 1), skin);
   R.face = new THREE.Mesh(shell('face', 1.01, null, { ps: FRONT - .95, pl: 1.9, ts: .72, tl: 2.0, w: 22, h: 20 }), new THREE.MeshStandardMaterial({ map: faceTex(ch, 'normal'), transparent: true, roughness: .6, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
   head.add(R.face);
@@ -236,7 +236,7 @@ export function buildRig(id, acc, g) {
   const st = ch.hair;
   const pony = () => { const pt = R.pony = grp(head, 0, .03, -.11); mesh(pt, sphGeo(.026, 10), hairM); mesh(pt, ponyGeo(), hairM, 0, -.008, -.004).scale.z = .85; const tie = new THREE.Mesh(new THREE.TorusGeometry(.021, .006, 6, 14), colorMat('#c9281f', .5)); tie.rotation.x = Math.PI / 2; tie.position.y = -.012; pt.add(tie); pt.rotation.x = .5; };
   const cap = () => { const cm = colorMat(ch.capCol || ch.suit, .6); mesh(head, shell('h_cap', 1.115, ([t]) => t < 1.33), cm); mesh(head, boxGeo(.15, .012, .1, .005), cm, 0, .052, .104).rotation.x = .18; mesh(head, sphGeo(.012, 8), cm, 0, .128, 0); };
-  if (st === 'short') mesh(head, shell('h_short', 1.075, hairline(1.0, 1.45, 2.2)), hairM);
+  if (st === 'short') { mesh(head, shell('h_short', 1.1, hairline(1.06, 1.5, 2.22)), hairM); for (const [x, y, z, r] of [[-.05, .085, .07, .05], [.01, .095, .08, .055], [.06, .082, .065, .048], [0, .11, .02, .07]]) mesh(head, sphGeo(r, 12), hairM, x, y, z).scale.set(1.15, .7, 1); }
   else if (st === 'slick') mesh(head, shell('h_slick', 1.065, hairline(.9, 1.4, 2.15)), hairM);
   else if (st === 'mop') mesh(head, shell('h_mop', 1.12, hairline(1.22, 1.62, 2.28)), hairM);
   else if (st === 'bob') mesh(head, shell('h_bob', 1.1, hairline(1.2, 2.3, 2.42), { post: (v, t) => { if (t > 1.65) { const k = 1 + (t - 1.65) * .2; v.x *= k; v.z *= k; } } }), hairM);
