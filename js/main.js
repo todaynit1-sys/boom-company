@@ -11,6 +11,7 @@ import { FLOOR_IDS } from './floors.js';
 import { TOY } from './toys.js';
 import './vox.js';
 import './people.js';
+import { loadModels } from './models.js';
 import * as ui from './ui.js';
 import { unlock } from './audio.js';
 import { duckMusic, musicState } from './music.js';
@@ -136,6 +137,8 @@ async function boot() {
   try { await Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 1500))]); } catch (e) { }
   initGfx(cv); fx.initFx(); resize();
   ui.init(MISSIONS, MISSION_IDS);
+  // 가구 모델: 5초 안에 못 받으면 예전 모양으로 시작한다
+  try { await Promise.race([loadModels(), new Promise(r => setTimeout(r, 5000))]); } catch (e) { }
   if (location.hash.includes('og')) stageOg(); else title();
   document.getElementById('boot').remove();
   requestAnimationFrame(frame);

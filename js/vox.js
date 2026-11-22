@@ -238,7 +238,20 @@ function pvox(p) {
     const mat = Array.isArray(o.material) ? o.material[0] : o.material; if (!mat || !mat.color || mat.transparent) return;
     if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
     bb.copy(o.geometry.boundingBox).applyMatrix4(mm.multiplyMatrices(im, o.matrixWorld));
-    const hex = avg(mat).getHex(), t = o.geometry.type || '', up = Math.abs(o.rotation.x) < .2 && Math.abs(o.rotation.z) < .2;
+    const hex = avg(mat).getHex(), t = o.geometry.type || '';
+    // 불러온 모델(여러 조각이 한 덩어리): 상자로 채우면 통짜가 되므로 겉면 삼각형을 따라 칸을 찍는다
+    if (t === 'BufferGeometry') {
+      const pa = o.geometry.attributes.position, ix = o.geometry.index, nt = (ix ? ix.count : pa.count) / 3, A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), st = Math.min(cx, cy, cz) * .6;
+      const mark = (x, y, z) => { const i = Math.floor((x + w / 2) / cx), j = Math.floor((y + h / 2) / cy), k = Math.floor((z + d / 2) / cz); if (i >= 0 && j >= 0 && k >= 0 && i < nx && j < ny && k < nz) colr[(j * nz + k) * nx + i] = hex; };
+      for (let f = 0; f < nt; f++) {
+        const a = ix ? ix.getX(f * 3) : f * 3, b = ix ? ix.getX(f * 3 + 1) : f * 3 + 1, c = ix ? ix.getX(f * 3 + 2) : f * 3 + 2;
+        A.fromBufferAttribute(pa, a).applyMatrix4(mm); B.fromBufferAttribute(pa, b).applyMatrix4(mm); C.fromBufferAttribute(pa, c).applyMatrix4(mm);
+        const n = Math.min(24, Math.ceil(Math.max(A.distanceTo(B), A.distanceTo(C), B.distanceTo(C)) / st));
+        for (let u = 0; u <= n; u++) for (let v = 0; v <= n - u; v++) { const s = u / (n || 1), q = v / (n || 1), r = 1 - s - q; mark(A.x * r + B.x * s + C.x * q, A.y * r + B.y * s + C.y * q, A.z * r + B.z * s + C.z * q); }
+      }
+      return;
+    }
+    const up = Math.abs(o.rotation.x) < .2 && Math.abs(o.rotation.z) < .2;
     const round = t.includes('Sphere') ? 2 : (t.includes('Cylinder') || t.includes('Cone')) && up ? 1 : 0;
     const i0 = clamp(Math.floor((bb.min.x + w / 2) / cx), 0, nx - 1), i1 = clamp(Math.ceil((bb.max.x + w / 2) / cx) - 1, i0, nx - 1);
     const j0 = clamp(Math.floor((bb.min.y + h / 2) / cy), 0, ny - 1), j1 = clamp(Math.ceil((bb.max.y + h / 2) / cy) - 1, j0, ny - 1);
