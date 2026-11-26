@@ -4,7 +4,7 @@ import { SETS, WHOS, MOTTOS } from './data/lines.js';
 import { G, won } from './state.js';
 import { sfx } from './audio.js';
 import { refreshMusic } from './music.js';
-import { FLOORS, FLOOR_IDS, floorLv } from './floors.js';
+import { FLOORS, FLOOR_IDS, floorLv, floorLocked, lockText, isCleared } from './floors.js';
 import { DEFS } from './data/props.js';
 
 export const act = {};
@@ -12,7 +12,7 @@ const $ = id => document.getElementById(id);
 const show = (id, on) => $(id).classList.toggle('off', !on);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const STYLES = [{ v: 'glass', n: '유리 빌딩', rank: 0 }, { v: 'brick', n: '벽돌 상가', rank: 1 }, { v: 'gov', n: '관공서풍', rank: 3 }];
-const SCREENS = ['s-title', 's-pick', 's-floors', 's-book', 's-build', 's-chars', 's-pause', 's-bill', 's-fake'];
+const SCREENS = ['s-title', 's-pick', 's-floors', 's-book', 's-build', 's-chars', 's-pause', 's-bill', 's-fake', 's-bonus', 's-bres', 's-ko'];
 export function only(id) { SCREENS.forEach(s => show(s, s === id)); }
 export function charName(id) { return S.charName[id] || CHARS[id].n; }
 // 저장이 브라우저에만 남는 게임이라 캐릭터·소품·건물은 처음부터 모두 연다(직급은 칭호로만 쓴다)
@@ -49,15 +49,19 @@ function showPick(missions, ids) {
   }
 }
 
-// ───── 자유 난동: 시작할 층 고르기(깬 도전과제 수는 이 기기에만 남는다)
+// ───── 자유 난동: 시작할 층 고르기(깬 도전과제 수·정복한 층은 이 기기에만 남는다). 12층은 3곳을 정복해야 열린다
+const lockI = () => el('i', 'padlock');
 function showFloors() {
   only('s-floors'); const box = $('fl-list'); box.textContent = '';
   for (const id of FLOOR_IDS) {
-    const f = FLOORS[id], got = f.goals.filter(g => S.done && S.done[g.id]).length, b = el('button', 'fl fl-' + id);
-    b.type = 'button'; b.appendChild(el('b', 'lv', f.lv));
-    const t = el('div', 'tx'); t.appendChild(el('strong', '', f.n)); t.appendChild(el('span', '', f.sub)); t.appendChild(el('em', '', f.desc)); b.appendChild(t);
-    b.appendChild(el('small', 'gl', '도전과제 ' + got + '/' + f.goals.length));
-    b.onclick = () => { sfx('up'); act.free(id); }; box.appendChild(b);
+    const f = FLOORS[id], got = f.goals.filter(g => S.done && S.done[g.id]).length, lock = floorLocked(id), b = el('button', 'fl fl-' + id + (lock ? ' lock' : ''));
+    b.type = 'button'; const lv = el('b', 'lv', f.lv); if (lock) lv.appendChild(lockI()); b.appendChild(lv);
+    const t = el('div', 'tx'), nm = el('strong', '', f.n);
+    if (isCleared(id)) nm.appendChild(el('small', 'cq', '정복'));
+    if (id === 'exec') nm.appendChild(el('small', 'bossb', S.bossWins ? '보스전 · 퇴치 ' + S.bossWins + '번' : '보스전'));
+    t.appendChild(nm); t.appendChild(el('span', '', f.sub)); t.appendChild(el('em', '', lock ? '잠김 — 다른 층 3곳을 정복하면 열려요' : f.desc)); b.appendChild(t);
+    b.appendChild(el('small', 'gl', lock ? lockText() : '도전과제 ' + got + '/' + f.goals.length));
+    b.onclick = () => { if (lock) { sfx('type'); return toast('잠긴 층 · ' + lockText()); } sfx('up'); act.free(id); }; box.appendChild(b);
   }
 }
 // 엘리베이터 층 버튼: 안에 들어서면 뜬다. PC에서는 버튼을 누를 수 있게 마우스 고정을 푼다
@@ -68,9 +72,12 @@ export function elev(d) {
   if (!d) { G.uiFree = false; return show('elev', false); }
   const box = $('el-btns'); box.textContent = '';
   d.floors.forEach((f, i) => {
-    const b = el('button', 'eb' + (f.id === d.cur ? ' on' : '')); b.type = 'button';
-    b.appendChild(el('b', '', f.lv)); b.appendChild(el('span', '', f.id === d.cur ? f.n + ' (여기)' : f.n)); if (!G.mobile) b.appendChild(el('kbd', '', String(i + 1)));
-    if (f.id !== d.cur) b.onclick = () => act.goFloor(f.id);
+    const b = el('button', 'eb' + (f.id === d.cur ? ' on' : '') + (f.lock ? ' lock' : '')); b.type = 'button';
+    const lv = el('b', '', f.lv); if (f.lock) lv.appendChild(lockI()); b.appendChild(lv);
+    const nm = el('span', '', f.id === d.cur ? f.n + ' (여기)' : f.n);
+    if (f.lock) nm.appendChild(el('small', 'lk', f.lock)); else if (f.done) nm.appendChild(el('small', 'cq', '정복'));
+    b.appendChild(nm); if (!G.mobile) b.appendChild(el('kbd', '', String(i + 1)));
+    if (f.id !== d.cur) b.onclick = () => { const lk = floorLocked(f.id) ? lockText(f.id) : ''; return lk ? toast('12층은 잠겨 있어요 · ' + lk) : act.goFloor(f.id); };
     box.appendChild(b);
   });
   show('elev', true);
@@ -90,7 +97,75 @@ export function goals(title, items, foot) {
 let goalT;
 export function goalToast(text, n) {
   const g = $('goalt'); g.textContent = ''; g.appendChild(el('small', '', '도전과제 달성 · 오늘 ' + n + '개째')); g.appendChild(el('b', '', text)); g.appendChild(el('em', '', '보너스 +3,000,000원'));
-  g.classList.remove('off', 'pop'); void g.offsetWidth; g.classList.add('pop'); clearTimeout(goalT); goalT = setTimeout(() => g.classList.add('off'), 2800);
+  g.classList.remove('off', 'pop', 'clear'); void g.offsetWidth; g.classList.add('pop'); clearTimeout(goalT); goalT = setTimeout(() => g.classList.add('off'), 2800);
+}
+// 층 정복 알림(금색)
+export function clearToast(title, sub) {
+  const g = $('goalt'); g.textContent = ''; g.appendChild(el('small', '', '층 정복 · 도전과제 4개 달성')); g.appendChild(el('b', '', title)); if (sub) g.appendChild(el('em', '', sub));
+  g.classList.remove('off', 'pop'); g.classList.add('clear'); void g.offsetWidth; g.classList.add('pop'); clearTimeout(goalT); goalT = setTimeout(() => g.classList.add('off'), 3400);
+}
+
+// ───── 보스전 표시: 내 체력(아래)·보스 체력(위 가운데)·남은 적. d = null이면 숨긴다
+const cl = {};
+export function combat(d) {
+  const set = (id, k, v) => { if (cl[k] !== v) { cl[k] = v; $(id).textContent = v; } };
+  if (!d) { if (cl.on) { cl.on = false; show('php', false); show('boss', false); document.body.classList.remove('combat'); } return; }
+  if (!cl.on) { cl.on = true; document.body.classList.add('combat'); for (const k in cl) if (k !== 'on') delete cl[k]; }
+  const hasHp = typeof d.hp === 'number'; show('php', hasHp);
+  if (hasHp) {
+    const k = Math.max(0, Math.min(1, d.hp / (d.maxHp || 100)));
+    if (cl.hp !== k) { cl.hp = k; $('php-bar').style.width = (k * 100).toFixed(1) + '%'; $('php').classList.toggle('low', k < .3); }
+    set('php-n', 'hn', String(Math.max(0, Math.ceil(d.hp))));
+  }
+  const b = d.boss; show('boss', !!b || d.left != null);
+  if (b) {
+    set('bs-name', 'bn', b.name); set('bs-phase', 'bp', b.phase ? b.phase + '단계' : '');
+    const k = b.maxHp ? Math.max(0, Math.min(1, b.hp / b.maxHp)) : 1; if (cl.bk !== k) { cl.bk = k; $('bs-hp').style.width = (k * 100).toFixed(1) + '%'; }
+  } else set('bs-name', 'bn', '보스전');
+  set('bs-left', 'bl', d.left != null ? '남은 적 ' + d.left : '');
+}
+// 쓰러졌을 때: 퇴사 처리… (다시 도전 / 나가기). 버튼을 누를 수 있게 마우스 고정을 푼다
+let koOn = false;
+export const modal = () => koOn;
+export function ko(on, d) {
+  if (!on) { if (koOn) { koOn = false; G.uiFree = false; show('s-ko', false); } return; }
+  koOn = true; $('ko-sub').textContent = d.sub || '';
+  $('ko-retry').onclick = () => { sfx('up'); d.retry(); }; $('ko-leave').onclick = () => { sfx('type'); d.leave(); };
+  show('s-ko', true); G.uiFree = true; if (document.pointerLockElement) document.exitPointerLock();
+}
+
+// ───── 번외 게임: 목록 · 진행 중 큰 시계와 점수 · 결과 카드
+export function showBonus() {
+  only('s-bonus'); const box = $('bn-list'); box.textContent = '';
+  for (const g of act.bonusList ? act.bonusList() : []) {
+    const b = el('button', 'fl bn-' + g.id); b.type = 'button'; b.appendChild(el('b', 'lv', g.lv));
+    const t = el('div', 'tx'); t.appendChild(el('strong', '', g.n)); t.appendChild(el('span', '', g.sub)); t.appendChild(el('em', '', g.desc)); b.appendChild(t);
+    const best = g.best(); b.appendChild(el('small', 'gl', best ? '최고 ' + g.fmt(best) : '첫 도전'));
+    b.onclick = () => { sfx('up'); act.bonus(g.id); }; box.appendChild(b);
+  }
+}
+const bh = {};
+export function bonusHud(d) {
+  if (!d) { if (bh.on) { bh.on = false; show('bhud', false); document.body.classList.remove('bonus'); $('bhud').classList.remove('hurry'); } return; }
+  if (!bh.on) { bh.on = true; bh.t = bh.s = bh.h = null; show('bhud', true); document.body.classList.add('bonus'); }
+  if (bh.t !== d.time) { bh.t = d.time; $('bh-time').textContent = d.time; }
+  if (bh.s !== d.score) { bh.s = d.score; $('bh-score').textContent = d.score; }
+  if (bh.h !== !!d.hurry) { bh.h = !!d.hurry; $('bhud').classList.toggle('hurry', bh.h); }
+}
+export function bonusResult(d) {
+  only('s-bres'); hudShow(false); over(''); subtitle(null); prompt(null);
+  const c = $('bres'); c.textContent = '';
+  c.appendChild(el('small', 'bt', '번외 게임 · ' + d.n));
+  const sc = el('b', 'bs', d.score); c.appendChild(sc);
+  if (d.isNew) c.appendChild(el('div', 'bnew', d.had ? '새 기록!' : '첫 기록!'));
+  if (d.grade) c.appendChild(el('div', 'bg', '「' + d.grade + '」'));
+  c.appendChild(el('div', 'bb', d.early ? '중간에 그만둬서 기록에는 남기지 않았어요' : '최고 기록 ' + d.best));
+  if (d.rows && d.rows.length) { const t = el('div', 'brow'); d.rows.forEach(([a, b]) => { const r = el('div', 'li'); r.appendChild(el('span', '', a)); r.appendChild(el('span', '', b)); t.appendChild(r); }); c.appendChild(t); }
+  if (d.money > 0) c.appendChild(el('div', 'bm', '부순 값 ' + won(d.money) + '은 누적 피해액·도감에 더했어요'));
+  const btns = el('div', 'p-btns');
+  const mk = (t, cls, fn) => { const x = el('button', 'btn ' + cls, t); x.type = 'button'; x.onclick = fn; btns.appendChild(x); };
+  mk('다시', 'main', () => act.bonus(d.id)); mk('나가기', '', () => act.bonusExit());
+  c.appendChild(btns);
 }
 export function alarm(on) { $('alarmfx').classList.toggle('on', !!on); }
 
@@ -138,7 +213,7 @@ export function showChars() { only('s-chars'); fillChars(); act.preview(true); }
 
 // ───── 게임 중 표시
 export function toggleObj() { $('obj').classList.toggle('open'); }
-export function hudShow(on) { show('hud', on); show('status', on); show('pad', on && G.mobile); show('cross', on && !G.mobile); if (!on) { show('keys', false); show('obj', false); show('band', false); show('elev', false); elevOn = false; $('vig').style.opacity = 0; alarm(false); } }
+export function hudShow(on) { show('hud', on); show('status', on); show('pad', on && G.mobile); show('cross', on && !G.mobile); if (!on) { show('keys', false); show('obj', false); show('band', false); show('elev', false); elevOn = false; $('vig').style.opacity = 0; alarm(false); combat(null); bonusHud(null); } }
 // 시계 넘김: 화면이 검게 됐다가 시각이 크게 뜬다
 export function fade(on, instant) {
   const f = $('fade');
@@ -236,7 +311,7 @@ export function bill(d) {
   if (d.promo) setTimeout(() => sfx('up'), 2000);
 }
 
-export function pause(on) { show('s-pause', on); if (on) show('p-skip', !!(act.canSkip && act.canSkip())); }
+export function pause(on) { show('s-pause', on); if (on) { show('p-skip', !!(act.canSkip && act.canSkip())); $('p-quit').textContent = act.isBonus && act.isBonus() ? '그만두고 결과 보기' : '그만두고 청구서 받기'; } }
 export function fake(on) {
   show('s-fake', on); if (!on) return;
   const t = $('fk-table'); if (t.rows.length) return;
@@ -246,6 +321,7 @@ export function fake(on) {
 
 export function init(missions, ids) {
   $('b-course').onclick = () => act.course(); $('b-pick').onclick = () => showPick(missions, ids); $('b-free').onclick = showFloors; $('b-rush').onclick = () => act.rush(); $('fl-back').onclick = () => only('s-title'); $('b-book').onclick = showBook; $('bk-back').onclick = () => only('s-title');
+  $('b-bonus').onclick = showBonus; $('bn-back').onclick = () => only('s-title');
   $('b-build').onclick = showBuilder; $('b-chars').onclick = showChars; $('pk-back').onclick = () => only('s-title');
   $('o-snd').onchange = e => { S.mute = !e.target.checked; save(); refreshMusic(); }; $('o-bgm').onchange = e => { S.bgm = e.target.checked; save(); refreshMusic(); };
   $('o-hap').onchange = e => { S.haptic = e.target.checked; save(); }; $('o-calm').onchange = e => { S.calm = e.target.checked; G.calm = S.calm; save(); };

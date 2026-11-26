@@ -4,7 +4,8 @@ export const copy = o => JSON.parse(JSON.stringify(o));
 function load() {
   let d = {};
   try { d = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
-  return Object.assign({ total: 0, best: 0, runs: 0, char: 'kim', charName: {}, gender: {}, acc: null, company: copy(DEF_COMPANY), slots: [null, null, null], mute: false, bgm: true, haptic: true, calm: false, seenHelp: false, counts: {}, lastAm: null, lastPm: null, skipArrive: false }, d);
+  // cleared = 정복한 층(도전과제 4개), bossWins = 사장님 퇴치 횟수, bonusBest = 번외 게임 최고 기록
+  return Object.assign({ total: 0, best: 0, runs: 0, char: 'kim', charName: {}, gender: {}, acc: null, company: copy(DEF_COMPANY), slots: [null, null, null], mute: false, bgm: true, haptic: true, calm: false, seenHelp: false, counts: {}, lastAm: null, lastPm: null, skipArrive: false, cleared: {}, bossWins: 0, bonusBest: {} }, d);
 }
 export const S = load();
 export function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }

@@ -1,4 +1,4 @@
-import { G, rand, clamp, lerp, angLerp } from './state.js';
+import { G, rand, pick, clamp, lerp, angLerp } from './state.js';
 import { CHARS, NPCS, look } from './data/chars.js';
 import { DEFS } from './data/props.js';
 import { S } from './save.js';
@@ -6,12 +6,13 @@ import { THREE, X, M, bx, colorMat, textMat, pl, canvasTex, speckle, labelMat, b
 import { CANNON, PH, GR, attack, damage, spawn, shove, explode, later, slow, addCombo, kill, distTo } from './engine.js';
 import * as fx from './fx.js';
 import { sfx, buzz } from './audio.js';
-import { mount, updateRide, sprayTick, useProp, shout, TOY } from './toys.js';
+import { mount, unmount, updateRide, sprayTick, useProp, shout, TOY } from './toys.js';
+import { pow, hurtFlash, hurtClear, lowHp } from './hitfx.js';
 
 export const I ={ mx: 0, mz: 0, jump: false, a: false, b: false, c: false, e: false, lookX: 0, lookY: 0 };
 export const P = { active: false };
 export const CAM = { yaw: 0, pitch: .28, dist: 4.3, mode: 'follow', t: 0, look: new THREE.Vector3(0, 1, 0) };
-const FIST = { n: '맨손', dmg: 10, r: .75, reach: .7, push: 3, cd: 210, snd: 'punch' };
+const FIST = { n: '맨손', dmg: 10, r: .75, reach: .7, push: 3, cd: 210, snd: 'jab' };
 const HIPY = .97, SEATY = .585;
 
 // ───── 몸 모양 (도형은 한 번만 만들어 둔다)
@@ -278,6 +279,33 @@ export function poseRig(R, st) {
     if (st.typing) { R.shL.rotation.set(-.62, 0, .16); R.shR.rotation.set(-.62, 0, -.16); R.elL.rotation.set(-1 + Math.sin(t * .4) * .04, 0, 0); R.elR.rotation.set(-1 + Math.sin(t * .4 + 2) * .04, 0, 0); fL = fR = .5; }
     else { R.shL.rotation.set(-.42, 0, .14); R.shR.rotation.set(-.42, 0, -.14); R.elL.rotation.set(-.7, 0, 0); R.elR.rotation.set(-.7, 0, 0); fL = fR = st.clench ? 1.5 : .5; }
   }
+  // 서 있는 자세들: 웅크리기·구르기·비틀·쓰러짐·들려서 버둥·모으기
+  const gt = G.tick;
+  if (st.cower) {
+    R.hips.position.y -= .3; R.hipL.rotation.set(-1.2, 0, .1); R.hipR.rotation.set(-1.2, 0, -.1); R.kneeL.rotation.x = R.kneeR.rotation.x = 1.9;
+    R.spine.rotation.set(.75, 0, Math.sin(gt * .9) * .025); R.shL.rotation.set(-2.5, 0, .55); R.shR.rotation.set(-2.5, 0, -.55); R.elL.rotation.x = R.elR.rotation.x = -1.9; R.head.rotation.x = .45; fL = fR = 1.5;
+  }
+  if (st.roll) {
+    R.hips.position.y -= .3; R.hipL.rotation.set(-2.0, 0, 0); R.hipR.rotation.set(-2.0, 0, 0); R.kneeL.rotation.x = R.kneeR.rotation.x = 2.3;
+    R.spine.rotation.set(1.0, 0, 0); R.head.rotation.x = .6; R.shL.rotation.set(-1.2, 0, .25); R.shR.rotation.set(-1.2, 0, -.25); R.elL.rotation.x = R.elR.rotation.x = -1.6; fL = fR = 1.6;
+  }
+  if (st.stag) {
+    const s = st.stag; R.spine.rotation.x = -.35 * s; R.spine.rotation.z = Math.sin(gt * .7) * .05 * s; R.head.rotation.x = -.35 * s;
+    R.shL.rotation.set(-.5 * s, 0, .95 * s); R.shR.rotation.set(-.5 * s, 0, -.95 * s); R.elL.rotation.x = R.elR.rotation.x = -.6 * s; R.kneeL.rotation.x += .3 * s; R.kneeR.rotation.x += .3 * s; fL = fR = .3;
+  }
+  if (st.ko) {
+    const k = st.ko; R.shL.rotation.set(-.3 * k, 0, 1.3 * k); R.shR.rotation.set(-.3 * k, 0, -1.3 * k); R.elL.rotation.x = R.elR.rotation.x = -.3 * k;
+    R.hipL.rotation.set(-.1 * k, 0, .18 * k); R.hipR.rotation.set(.05 * k, 0, -.18 * k); R.kneeL.rotation.x = .35 * k; R.kneeR.rotation.x = .1 * k; R.spine.rotation.set(0, 0, 0); R.head.rotation.set(-.2 * k, .5 * k, 0); fL = fR = .3;
+  }
+  if (st.held) {
+    const w = Math.sin(gt * .45); R.hipL.rotation.x = -.6 + w * .5; R.hipR.rotation.x = -.6 - w * .5; R.kneeL.rotation.x = .9 + w * .3; R.kneeR.rotation.x = .9 - w * .3;
+    R.shL.rotation.set(-1.4 + w * .6, 0, 1.0); R.shR.rotation.set(-1.4 - w * .6, 0, -1.0); R.elL.rotation.x = R.elR.rotation.x = -.5; R.head.rotation.x = -.3; fL = fR = .3;
+  }
+  if (st.chg) {
+    const c = st.chg, sh = c >= 1 ? Math.sin(gt * 1.7) * .02 : 0; R.hips.position.y -= .06 * c; R.hipL.rotation.x -= .2 * c; R.hipR.rotation.x -= .2 * c; R.kneeL.rotation.x += .35 * c; R.kneeR.rotation.x += .35 * c;
+    R.spine.rotation.set(.22 * c + sh, .35 * c, sh); R.shR.rotation.set(.75 * c, 0, -.35 * c); R.elR.rotation.x = -1.5 * c; R.shL.rotation.set(-1.25 * c, 0, .3 * c); R.elL.rotation.x = -1.6 * c; fL = fR = 1.6;
+  }
+  if (st.guard) { R.shL.rotation.set(-1.55, 0, .45); R.elL.rotation.x = -1.35; fL = 1.6; }
   R.ankL.rotation.x = -(R.hipL.rotation.x + R.kneeL.rotation.x) * .7; R.ankR.rotation.x = -(R.hipR.rotation.x + R.kneeR.rotation.x) * .7;
   if (st.seated) R.ankL.rotation.x = R.ankR.rotation.x = 0;
   if (st.air) { R.hipL.rotation.x = -.6; R.hipR.rotation.x = -.15; R.kneeL.rotation.x = 1.0; R.kneeR.rotation.x = .55; R.shL.rotation.z = .55; R.shR.rotation.z = -.55; }
@@ -288,14 +316,69 @@ export function poseRig(R, st) {
   if (st.relief && !st.seated && !st.cheer) { R.spine.rotation.x = -.1; R.head.rotation.x = -.22; R.shL.rotation.set(.1, 0, .16); R.shR.rotation.set(.1, 0, -.16); R.elL.rotation.x = -.1; R.elR.rotation.x = -.1; }
   const a = st.atk;
   if (a) {
-    const k = a.t, up = k < .35 ? k / .35 : 1, hit = k < .35 ? 0 : Math.min(1, (k - .35) / .22), back = k > .7 ? (k - .7) / .3 : 0;
-    if (a.type === 'kick') {
-      const q = up * (1 - back); R.hipR.rotation.x = -1.75 * (k < .35 ? up * .5 : hit) * (1 - back); R.kneeR.rotation.x = (k < .35 ? 1.3 * up : 1.3 * (1 - hit)) * (1 - back); R.ankR.rotation.x = .3 * q; R.spine.rotation.x = -.28 * q; R.shL.rotation.x = -.6 * q; R.shR.rotation.x = .5 * q;
+    const k = a.t, up = k < .35 ? k / .35 : 1, hit = k < .35 ? 0 : Math.min(1, (k - .35) / .22), back = k > .7 ? (k - .7) / .3 : 0, e = 1 - back, q = up * e, ty = a.type;
+    if (ty === 'kick') {
+      R.hipR.rotation.x = -1.75 * (k < .35 ? up * .5 : hit) * e; R.kneeR.rotation.x = (k < .35 ? 1.3 * up : 1.3 * (1 - hit)) * e; R.ankR.rotation.x = .3 * q; R.spine.rotation.x = -.28 * q; R.shL.rotation.x = -.6 * q; R.shR.rotation.x = .5 * q;
+    } else if (ty === 'flurry') {
+      // 다다다: 양손이 번갈아 앞으로
+      const w = Math.sin(k * 30), s = Math.min(1, k * 6) * e;
+      R.shR.rotation.set(-1.5 * s, 0, -.15); R.elR.rotation.x = -1.5 * s * (1 - Math.max(0, w)); R.shL.rotation.set(-1.5 * s, 0, .15); R.elL.rotation.x = -1.5 * s * (1 - Math.max(0, -w));
+      R.spine.rotation.y = .3 * w * s; R.spine.rotation.x = .12 * s; fL = fR = 1.6;
+    } else if (ty === 'upper') {
+      const c = up * (1 - hit); R.hips.position.y -= .12 * c; R.kneeL.rotation.x += .5 * c; R.kneeR.rotation.x += .5 * c; R.hipL.rotation.x -= .3 * c; R.hipR.rotation.x -= .3 * c;
+      R.shR.rotation.set(lerp(.35 * up, -2.85, hit) * e, 0, -.15); R.elR.rotation.x = (-2.0 * c - .5 * hit) * e; R.spine.rotation.x = lerp(.25 * up, -.3, hit) * e; R.spine.rotation.y = lerp(.3 * up, -.25, hit) * e; R.head.rotation.x = -.25 * hit * e; R.shL.rotation.set(-.8 * q, 0, .3); R.elL.rotation.x = -1.4 * q; fL = fR = 1.6;
+    } else if (ty === 'slide') {
+      const s = Math.min(1, k * 5) * e;
+      R.hips.position.y -= .42 * s; R.hipR.rotation.set(-1.45 * s, 0, 0); R.kneeR.rotation.x = .05; R.hipL.rotation.set(-.55 * s, 0, 0); R.kneeL.rotation.x = 1.5 * s; R.ankR.rotation.x = .3 * s;
+      R.spine.rotation.set(-.85 * s, 0, 0); R.shL.rotation.set(.7 * s, 0, .5 * s); R.shR.rotation.set(.7 * s, 0, -.5 * s); R.elL.rotation.x = R.elR.rotation.x = -.3 * s; R.head.rotation.x = .35 * s;
+    } else if (ty === 'file' || ty === 'throw') {
+      // 어깨 뒤로 젖혔다가 던진다
+      R.shR.rotation.set(lerp(1.0 * up, -1.7, hit) * e, 0, -.2 - .2 * up * (1 - hit)); R.elR.rotation.x = lerp(-1.7 * up, -.15, hit) * e;
+      R.spine.rotation.y = lerp(.45 * up, -.4, hit) * e; R.spine.rotation.x = lerp(-.12 * up, .22, hit) * e; R.shL.rotation.set(-.9 * q, 0, .3); fR = hit > .3 ? .3 : 1.4;
+    } else if (ty === 'round') {
+      R.hipR.rotation.set(-.5 * q, 0, -1.35 * q); R.kneeR.rotation.x = 1.3 * up * (1 - hit) + .1; R.spine.rotation.z = .45 * q; R.spine.rotation.x = -.1 * q; R.shL.rotation.set(-.4 * q, 0, .9 * q); R.shR.rotation.set(.2 * q, 0, -.7 * q);
+    } else if (ty === 'headbutt') {
+      R.spine.rotation.x = lerp(-.35 * up, .75, hit) * e; R.head.rotation.x = lerp(-.3 * up, .45, hit) * e; R.shL.rotation.set(.5 * q, 0, .35 * q); R.shR.rotation.set(.5 * q, 0, -.35 * q); fL = fR = 1.5;
+    } else if (ty === 'belly') {
+      R.spine.rotation.x = lerp(-.4 * up, -.18, hit) * e; R.hips.position.z = lerp(-.1 * up, .16, hit) * e; R.head.rotation.x = -.2 * q;
+      R.shL.rotation.set(lerp(.3, 1.0, hit) * q, 0, .6 * q); R.shR.rotation.set(lerp(.3, 1.0, hit) * q, 0, -.6 * q);
+    } else if (ty === 'chop') {
+      R.shR.rotation.set(lerp(-2.9 * up, -.7, hit) * e, 0, -.25 * q); R.elR.rotation.x = -.15 * q; R.spine.rotation.x = lerp(-.15 * up, .38, hit) * e; R.spine.rotation.y = lerp(.3 * up, -.2, hit) * e; fR = .2;
+    } else if (ty === 'golf') {
+      // 두 손을 모아 오른쪽 뒤로 젖혔다가 왼쪽 위로 휘두른다
+      const sw = lerp(up, -1, hit);
+      R.spine.rotation.y = .95 * sw * e; R.spine.rotation.x = .3 * e;
+      R.shL.rotation.set((-1.0 - .9 * Math.abs(sw)) * e, 0, (.2 - .6 * sw) * e); R.shR.rotation.set((-1.0 - .9 * Math.abs(sw)) * e, 0, (-.2 - .6 * sw) * e);
+      R.elL.rotation.x = R.elR.rotation.x = -.25 * e; fL = fR = 1.7;
+    } else if (ty === 'spinkick') {
+      R.hipR.rotation.set(.9 * q, 0, -.9 * q); R.kneeR.rotation.x = .2; R.spine.rotation.x = .35 * q; R.spine.rotation.z = .3 * q; R.shL.rotation.set(-.6 * q, 0, .8 * q); R.shR.rotation.set(.3 * q, 0, -.8 * q);
+    } else if (ty === 'dropkick') {
+      const s = Math.min(1, k * 4) * e;
+      R.hipL.rotation.x = R.hipR.rotation.x = -1.5 * s; R.kneeL.rotation.x = R.kneeR.rotation.x = .1 + .9 * up * (1 - hit) * s; R.spine.rotation.x = -.7 * s;
+      R.shL.rotation.set(.4 * s, 0, 1.0 * s); R.shR.rotation.set(.4 * s, 0, -1.0 * s); R.head.rotation.x = .3 * s;
+    } else if (ty === 'spin') {
+      R.shL.rotation.set(-.3, 0, 1.45 * e); R.shR.rotation.set(st.armed ? -1.45 * e : -.3, 0, st.armed ? -.6 : -1.45 * e); R.elL.rotation.x = R.elR.rotation.x = -.15; R.spine.rotation.x = .1; R.hips.position.y -= .05; fL = fR = 1.6;
+    } else if (ty === 'dash') {
+      // 왼쪽 어깨를 앞세워 들이받는다
+      const s = Math.min(1, k * 6) * e; R.spine.rotation.x = .1 + .4 * s; R.spine.rotation.y = .55 * s;
+      R.shL.rotation.set(-.5 * s, 0, .15); R.elL.rotation.x = -1.7 * s; R.shR.rotation.set(.6 * s, 0, -.3); R.elR.rotation.x = -.8 * s; R.head.rotation.x = .15 * s; fL = fR = 1.6;
+    } else if (ty === 'dive') {
+      R.hipR.rotation.x = -1.25; R.kneeR.rotation.x = .1; R.hipL.rotation.x = -.2; R.kneeL.rotation.x = 1.6; R.ankR.rotation.x = .4; R.spine.rotation.x = -.35;
+      R.shL.rotation.set(.6, 0, 1.0); R.shR.rotation.set(.6, 0, -1.0); R.elL.rotation.x = R.elR.rotation.x = -.4;
+    } else if (ty === 'punch') {
+      // 적: 크게 뒤로 뺐다가 곧게 뻗는 주먹
+      R.shR.rotation.set(lerp(.6 * up, -1.55, hit) * e, 0, -.1); R.elR.rotation.x = lerp(-1.7 * up, -.05, hit) * e; R.spine.rotation.y = lerp(.5 * up, -.35, hit) * e; R.spine.rotation.x = lerp(-.05, .2, hit) * e;
+      R.shL.rotation.set(-1.1 * q, 0, .2); R.elL.rotation.x = -1.6 * q; fL = fR = 1.6;
+    } else if (ty === 'bomb') {
+      R.shL.rotation.set(lerp(-2.8 * up, -1.2, hit) * e, 0, lerp(.2, 1.5, hit) * q); R.shR.rotation.set(lerp(-2.8 * up, -1.2, hit) * e, 0, -lerp(.2, 1.5, hit) * q); R.spine.rotation.x = lerp(-.25 * up, .15, hit) * e; fL = fR = .4;
+    } else if (ty === 'roar') {
+      const sh = Math.sin(gt * 1.9) * .06; R.shL.rotation.set(.35 + sh, 0, 1.1 * q); R.shR.rotation.set(.35 - sh, 0, -1.1 * q); R.elL.rotation.x = R.elR.rotation.x = -1.3 * q; R.spine.rotation.x = -.3 * q; R.head.rotation.x = -.4 * q; fL = fR = 1.6;
     } else {
-      const ang = lerp(lerp(0, -2.75, up), a.type === 'smash' ? -.25 : -.75, hit) * (1 - back), side = a.alt ? -1 : 1;
+      // swing(때리기 1·2타, 무기) · smash(무기 강타) · stampk(두 손 내려찍는 결재 도장)
+      const two = ty === 'smash' || ty === 'stampk', ang = lerp(lerp(0, -2.75, up), two ? -.25 : -.75, hit) * e, side = a.alt ? -1 : 1;
       R.shR.rotation.set(ang, 0, -.1 - (a.alt ? .5 * up * (1 - hit) : 0)); R.elR.rotation.x = -.35 * (1 - hit); fR = 1.6;
-      if (a.type === 'smash') { R.shL.rotation.set(ang, 0, .35); R.elL.rotation.x = -.5 * (1 - hit); fL = 1.6; }
-      R.spine.rotation.y = side * lerp(-.45 * up, .45, hit) * (1 - back); R.spine.rotation.x = lerp(-.12 * up, .3, hit) * (1 - back);
+      if (two) { R.shL.rotation.set(ang, 0, .35); R.elL.rotation.x = -.5 * (1 - hit); fL = 1.6; }
+      R.spine.rotation.y = side * lerp(-.45 * up, .45, hit) * e; R.spine.rotation.x = lerp(-.12 * up, .3, hit) * e;
     }
   }
   if (st.armed) fR = 1.7;
@@ -318,9 +401,33 @@ export function spawnPlayer(id, x, z, yaw = 0) {
   const body = new CANNON.Body({ mass: 70, material: PH.matP, fixedRotation: true, allowSleep: false, collisionFilterGroup: GR.PLAYER, collisionFilterMask: GR.STATIC | GR.PROP | GR.PWALL });
   body.addShape(new CANNON.Sphere(.3), new CANNON.Vec3(0, .3, 0)); body.addShape(new CANNON.Sphere(.3), new CANNON.Vec3(0, .9, 0));
   body.position.set(x, .02, z); body.isPlayer = true; body.updateMassProperties(); PH.world.addBody(body);
-  Object.assign(P, { id, ch: CHARS[id], R, body, yaw, walk: 0, speed: 0, atk: null, cdB: 0, n3: 0, air: 0, jumps: 0, slam: false, rush: 0, storm: 0, carry: null, weapon: null, wdef: null, wdur: 0, wmesh: null, lock: 0, pj: false, pb: false, pc: false, pe: false, pa: false, eHold: 0, active: true, t: 0, onG: true, cand: null, seated: null, ghost: 0, auto: null, cheer: false, expr: 'normal', blinkT: 2.5, tremble: 0, look: 0, ride: null, fuel: 0, spraying: false, flyT: 0, flew: false });
+  Object.assign(P, { id, ch: CHARS[id], R, body, yaw, walk: 0, speed: 0, atk: null, cdB: 0, n3: 0, air: 0, jumps: 0, slam: false, rush: 0, storm: 0, carry: null, weapon: null, wdef: null, wdur: 0, wmesh: null, lock: 0, pj: false, pb: false, pc: false, pe: false, pa: false, eHold: 0, active: true, t: 0, onG: true, cand: null, seated: null, ghost: 0, auto: null, cheer: false, expr: 'normal', blinkT: 2.5, tremble: 0, look: 0, ride: null, fuel: 0, spraying: false, flyT: 0, flew: false,
+    // 결전용 체력과 새 동작들의 상태
+    hp: 100, maxHp: 100, ko: false, koT: 0, koK: 0, koSent: false, inv: 0, blink: 0, stag: 0, lag: 0, hurtF: 0, roll: 0, rollMax: 24, rollCd: 0, rdx: 0, rdz: 0, rollBack: false,
+    bPend: false, bHold: 0, chgFull: false, grab: null, pcand: null, pd: 9, cd: 9, dive: false, ddx: 0, ddz: 0, runT: 0, jT: -99, cdD: 0, lastA: -99 });
   CAM.yaw = yaw + Math.PI; CAM.pitch = .28; CAM.mode = 'follow';
-  R.root.visible = true; R.root.position.set(x, 0, z); R.root.rotation.y = yaw;
+  R.root.rotation.order = 'YXZ'; R.root.visible = true; R.root.position.set(x, 0, z); R.root.rotation.set(0, yaw, 0); if (R.club) R.club.visible = false;
+  hurtClear();
+}
+// 골프 스윙 때만 손에 나타나는 골프채(사장님도 같이 쓴다)
+export function clubMesh(R, on) {
+  if (!R.club) {
+    if (!on) return;
+    const g = new THREE.Group(); g.scale.setScalar(1 / (R.handR.scale.x || 1));
+    mesh(g, cylGeo(.011, .011, .9, 6), M('chrome'), 0, -.5, 0); mesh(g, boxGeo(.05, .045, .11, .01), M('chrome'), 0, -.95, .035); mesh(g, cylGeo(.017, .017, .2, 6), M('rubber'), 0, -.06, 0);
+    R.handR.add(g); R.club = g;
+  }
+  R.club.visible = on;
+}
+// 결재판(막는 사람이 왼손에 든다)
+export function boardMesh(R, on) {
+  if (!R.board) {
+    if (!on) return;
+    const g = new THREE.Group(); g.scale.setScalar(1 / (R.handL.scale.x || 1));
+    mesh(g, boxGeo(.26, .34, .02, .006), M('plasticBlue'), 0, -.15, -.03); mesh(g, boxGeo(.21, .26, .004), M('paper'), 0, -.16, -.042);
+    R.handL.add(g); R.board = g;
+  }
+  R.board.visible = on;
 }
 export function hidePlayer() { P.active = false; if (P.R) P.R.root.visible = false; }
 export function placeAt(x, z, yaw) { if (P.seated) standUp(); P.ghost = 0; setMask(); P.body.position.set(x, .02, z); P.body.velocity.set(0, 0, 0); P.yaw = yaw; CAM.yaw = yaw + Math.PI; P.auto = null; }
@@ -328,7 +435,7 @@ export function placeAt(x, z, yaw) { if (P.seated) standUp(); P.ghost = 0; setMa
 export function seatOf(ch) { const b = ch.body, q = b.quaternion, fx_ = 2 * (q.x * q.z + q.w * q.y), fz = 1 - 2 * (q.x * q.x + q.y * q.y), yaw = Math.atan2(fx_, fz); return { x: b.position.x + Math.sin(yaw) * .04, z: b.position.z + Math.cos(yaw) * .04, yaw }; }
 export function sit(chair) {
   if (!chair || chair.dead || !P.active) return;
-  if (P.carry) throwCarry(true);
+  if (P.carry) throwCarry(true); if (P.grab) tossPerson(true); P.bPend = false; P.roll = 0;
   const b = chair.body, st = seatOf(chair);
   b.quaternion.setFromEuler(0, st.yaw, 0); b.position.y = chair.size[1] / 2 + .004; b.velocity.set(0, 0, 0); b.angularVelocity.set(0, 0, 0); b.sleep(); chair.g.position.copy(b.position); chair.g.quaternion.copy(b.quaternion);
   P.seated = chair; P.auto = null; P.body.position.set(st.x, .02, st.z); P.body.velocity.set(0, 0, 0); P.yaw = st.yaw; setMask(); sfx('step', .6);
@@ -381,7 +488,7 @@ export function flipProp(p) {
 // E로 집거나 엎을 수 있는 가장 가까운 물건
 function findCand() {
   const pp = P.body.position, f = fwd(), c = { x: pp.x + f.x * .7, y: .9, z: pp.z + f.z * .7 }; let best = null, bd = 1.5;
-  if (G.want && !G.want.dead && !G.want.held && distTo(G.want, c, .9) < 1.9) return G.want;
+  if (G.want && !G.want.dead && !G.want.held && distTo(G.want, c, .9) < 1.9) { P.cd = 0; return G.want; }
   for (const p of G.props) {
     if (p.dead || p.kind !== 'obj' || p.held || p === P.seated) continue; const def = p.def;
     // 비상벨처럼 벽에 붙은 것은 누를 수만 있다. 탈것은 자유 난동에서만
@@ -390,39 +497,255 @@ function findCand() {
     const can = def.use || def.weapon || def.flip || ride || (def.grab !== false && p.body.mass <= 25); if (!can) continue;
     const d = distTo(p, c, .7) + (def.weapon ? -.4 : 0) + (def.flip ? .25 : 0); if (d < bd) { bd = d; best = p; }
   }
-  return best;
+  P.cd = bd; return best;
+}
+// 앞에 있는 사람(잡을 수 있는). 거리는 몸 가운데까지라 물건과 비교할 때 조금 빼 준다
+function findPerson() {
+  if (!G.people || !G.people.near) return null;
+  const pp = P.body.position, n = G.people.near(pp.x, pp.z, Math.sin(P.yaw), Math.cos(P.yaw), 1.35);
+  P.pd = n ? Math.max(0, G.people.nd - .95) : 9; return n;
 }
 
+// 이동 입력이 없으면 가까운 부술 것(사람 포함) 쪽으로 몸을 돌린다
+function autoAim() {
+  if (I.mx || I.mz) return;
+  const pp = P.body.position, f = fwd(), c = { x: pp.x, y: .9, z: pp.z }; let bd = 2.6, tx = 0, tz = 0, ok = false;
+  for (const p of G.props) { if (p.dead || p.hp == null || p.held) continue; const d = distTo(p, c, .8); if (d > bd) continue; const bp = p.body.position, dx = bp.x - pp.x, dz = bp.z - pp.z, l = Math.hypot(dx, dz) || 1; if ((dx * f.x + dz * f.z) / l < -.2) continue; bd = d; tx = bp.x; tz = bp.z; ok = true; }
+  const n = G.people && G.people.near ? G.people.near(pp.x, pp.z, f.x, f.z, 2.4, true, -.2) : null;
+  if (n && G.people.nd - .35 < bd) { tx = n.body.position.x; tz = n.body.position.z; ok = true; }
+  if (ok) P.yaw = Math.atan2(tx - pp.x, tz - pp.z);
+}
 function startAtk(kind) {
-  const W = P.wdef || FIST, ch = P.ch, pp = P.body.position;
-  if (!I.mx && !I.mz) { let best = null, bd = 2.6; const f = fwd(); for (const p of G.props) { if (p.dead || p.hp == null || p.held) continue; const d = distTo(p, { x: pp.x, y: .9, z: pp.z }, .8); if (d > bd) continue; const bp = p.body.position, dx = bp.x - pp.x, dz = bp.z - pp.z, l = Math.hypot(dx, dz) || 1; if ((dx * f.x + dz * f.z) / l < -.2) continue; bd = d; best = p; } if (best) P.yaw = Math.atan2(best.body.position.x - pp.x, best.body.position.z - pp.z); }
+  const W = P.wdef || FIST, ch = P.ch;
+  autoAim();
   const rate = ch.rate * (P.rush > 0 ? 1.8 : 1);
-  if (kind === 'a') { P.n3 = (P.n3 + 1) % 3; P.atk = { type: 'swing', t: 0, dur: W.cd / 1000 / rate, alt: P.n3 === 1, third: P.n3 === 0, k: 'a' }; }
+  if (kind === 'a') {
+    // 잠깐 쉬었다 치면 1타부터. 맨손 3타째는 직급마다 다른 마무리
+    if (G.tick - P.lastA > 50) P.n3 = 0;
+    P.lastA = G.tick; P.n3 = (P.n3 + 1) % 3;
+    if (P.n3 === 0 && !P.weapon && ch.mv && MV[ch.mv.fin]) { startMove(ch.mv.fin); return; }
+    P.atk = { type: 'swing', t: 0, dur: W.cd / 1000 / rate, alt: P.n3 === 1, third: P.n3 === 0, k: 'a' };
+  }
   else { P.atk = { type: P.weapon ? 'smash' : 'kick', t: 0, dur: (P.weapon ? W.cd * 1.7 : 430) / 1000 / Math.sqrt(rate), k: 'b' }; P.cdB = 8; }
 }
+// 강타: 무기를 들었으면 무기 강타, 맨손이면 직급 기술
+function heavyAtk() {
+  const mv = P.ch.mv;
+  if (P.weapon || !mv || !MV[mv.hv]) return startAtk('b');
+  autoAim(); startMove(mv.hv); P.cdB = 8;
+}
+function wear() { if (P.wdur > 0 && --P.wdur <= 0) { fx.text(headPos(.3), P.wdef.n + ' 사망', 'note'); fx.bitsAt(headPos(-.6), 20, '#e4e1d8', 4, 3); sfx('plastic'); dropWeapon(true); } }
 function doHit(a) {
   const W = P.wdef || FIST, ch = P.ch, pp = P.body.position, f = fwd(), heavy = a.k === 'b';
   let dmg, r, reach, imp;
   if (!heavy) { dmg = W.dmg * ch.pow * (a.third ? 1.5 : 1); r = W.r; reach = W.reach; const pu = W.push * (a.third ? 1.8 : 1); imp = { x: f.x * pu, y: 1.2 + (W.up || 0) * 3 * (ch.launch || 1), z: f.z * pu }; }
   else if (P.weapon) { dmg = W.dmg * 1.9 * ch.pow; r = W.r * 1.15; reach = W.reach; const pu = W.push * 1.5 * (ch.launch || 1); imp = { x: f.x * pu, y: 3.5 + (W.up || 0) * 4, z: f.z * pu }; }
   else { dmg = 30 * ch.pow; r = .9; reach = .85; imp = { x: f.x * 8 * (ch.launch || 1), y: 4.5, z: f.z * 8 * (ch.launch || 1) }; }
-  const hits = attack({ x: pp.x + f.x * reach, y: pp.y + .9, z: pp.z + f.z * reach }, r, dmg, imp, { heavy: heavy || W.heavy, tall: .65, skip: P.carry });
-  if (hits.length) {
+  const hits = attack({ x: pp.x + f.x * reach, y: pp.y + .9, z: pp.z + f.z * reach }, r, dmg, imp, { heavy: heavy || W.heavy, tall: .65, skip: P.carry, pk: ch.pow * (heavy ? 1.3 : a.third ? 1.2 : 1), brk: heavy });
+  const np = G.people ? G.people.lastN || 0 : 0;
+  if (hits.length || np) {
     addCombo(hits.length); G.rage = Math.min(100, G.rage + hits.length * 1.5 + (heavy ? 2 : 0)); G.shake = Math.max(G.shake, heavy ? .16 : .05); if (heavy || W.heavy) G.hitstop = Math.max(G.hitstop, 55); buzz(8);
-    sfx(W.snd, .6); if (heavy && W.word) fx.text(headPos(.2), W.word, 'note');
-    if (W.tamb) { if (G.emit) G.emit('tamb', hits.length); if (Math.random() < .35) fx.text(headPos(.2), '찰랑!', 'note'); }
-    if (P.wdur > 0 && --P.wdur <= 0) { fx.text(headPos(.3), P.wdef.n + ' 사망', 'note'); fx.bitsAt(headPos(-.6), 20, '#e4e1d8', 4, 3); sfx('plastic'); dropWeapon(true); }
+    sfx(heavy && !P.weapon ? 'kickh' : W.snd, .6); if (heavy && W.word) fx.text(headPos(.2), W.word, 'note');
+    if (hits.length) { if (W.tamb) { if (G.emit) G.emit('tamb', hits.length); if (Math.random() < .35) fx.text(headPos(.2), '찰랑!', 'note'); } wear(); }
   } else sfx('whoosh', .6);
 }
 
+// ───── 새 동작들(직급 마무리·강타, 돌진, 모아치기, 내려찍기)
+const feet = () => ({ x: P.body.position.x, y: .1, z: P.body.position.z });
+// 앞쪽 한 점(reach 앞, dy 높이)을 친다. 피해는 직급 힘을 곱한다. 맞힌 물건 수 + 맞은 사람 수를 돌려준다
+function strike(reach, dy, r, dmg, ix, iy, iz, o = {}) {
+  const pp = P.body.position, f = fwd();
+  const hits = attack({ x: pp.x + f.x * reach, y: pp.y + dy, z: pp.z + f.z * reach }, r, dmg * P.ch.pow, { x: ix, y: iy, z: iz }, { heavy: o.heavy !== false, radial: o.radial, tall: o.tall ?? .65, skip: P.carry, max: o.max, pk: (o.pk || 1.15) * P.ch.pow, brk: o.brk ?? o.heavy !== false });
+  const n = hits.length + (G.people ? G.people.lastN || 0 : 0);
+  if (n) {
+    addCombo(hits.length); G.rage = Math.min(100, G.rage + hits.length * 2 + 1); G.shake = Math.max(G.shake, o.shake ?? .16); G.hitstop = Math.max(G.hitstop, o.stop ?? 55); buzz(o.buzz || 14);
+    if (o.snd) sfx(o.snd, o.vol ?? .8); if (o.word) fx.text(headPos(.25), o.word, 'word');
+  } else if (o.miss !== false) sfx('whoosh', .6);
+  return n;
+}
+// 바로 앞(r 안)에 칠 것이 있나
+function frontTarget(r) {
+  const pp = P.body.position, f = fwd(), c = { x: pp.x + f.x * r * .55, y: pp.y + .9, z: pp.z + f.z * r * .55 };
+  if (G.people && G.people.near && G.people.near(pp.x, pp.z, f.x, f.z, r, true)) return true;
+  for (const p of G.props) { if (p.dead || p.hp == null || p.held || (p.fixed && p.def.wall)) continue; if (distTo(p, c, .65) < r * .55) return true; }
+  return false;
+}
+const FLR = [.18, .36, .54, .74];
+// dur 초(공격 속도로 나눈다: fast면 그대로, 아니면 제곱근) · at 맞히는 순간(2 = 직접 처리) · spd 그동안 걷는 속도 배수
+// drive = 동작이 몸을 직접 움직인다 · sweep = [시작, 끝] 사이에서 무언가 맞을 때까지 계속 친다
+const MV = {
+  // 인턴 마무리: 다다다 4연타
+  flurry: { dur: .62, at: 2, spd: .3, fast: true, k: 'a', start() { sfx('whoosh', .5); },
+    tick(A) { while (A.n < 4 && A.t >= FLR[A.n]) { const last = A.n === 3, f = fwd(); A.n++; strike(.7, .95, .85, last ? 16 : 7, f.x * (last ? 7 : 1.6), last ? 3.5 : 1, f.z * (last ? 7 : 1.6), { heavy: last, snd: 'jab', vol: last ? .8 : .55, shake: last ? .14 : .04, stop: last ? 60 : 22, miss: false, word: last ? '다다다!' : null, pk: last ? 1.1 : .6 }); } } },
+  // 인턴 강타: 미끄러져 들어가 다리를 걸어 띄운다
+  slide: { dur: .62, at: 2, spd: 0, drive: true, sweep: [.08, .8], start(A) { const f = fwd(); A.dx = f.x; A.dz = f.z; sfx('slide'); },
+    tick(A) { const v = P.body.velocity, s = A.done ? 1 : A.t < .8 ? 10 * (1 - A.t * .7) : 2; v.x = A.dx * s; v.z = A.dz * s; if (G.tick % 5 === 0) fx.bitsAt(feet(), 4, '#d8d0bf', 1.5, .8); },
+    hit(A) { return strike(.55, .35, .8, 30, A.dx * 4, 9, A.dz * 4, { tall: .5, snd: 'kickh', stop: 70, shake: .2, miss: false, word: '슬라이딩!' }); } },
+  // 주임 마무리: 두 손 결재 도장
+  stampk: { dur: .56, at: .5, spd: .3, k: 'a',
+    hit() { const pp = P.body.position, f = fwd(), n = strike(.85, .7, .95, 24, f.x * 3, 2.5, f.z * 3, { snd: 'stamp', vol: .75, stop: 70, shake: .22, miss: false }); const c = { x: pp.x + f.x * .95, y: .1, z: pp.z + f.z * .95 }; fx.burst(c, .7); fx.text({ x: c.x, y: 1.5, z: c.z }, '반려', 'stamp'); if (!n) sfx('stamp', .4); } },
+  // 주임 강타: 가까우면 서류철로 후려치고, 멀면 화면이 보는 쪽으로 던진다
+  file: { dur: .52, at: .45, spd: .4,
+    hit() {
+      const pp = P.body.position, f = fwd();
+      if (frontTarget(1.4)) { strike(.8, .9, .9, 28, f.x * 7, 4, f.z * 7, { snd: 'chop', word: '서류철!' }); return; }
+      const a = aim(), up = Math.max(.1, .45 - CAM.pitch) * 5; P.yaw = Math.atan2(a.x, a.z);
+      const b = spawn('binder', pp.x + a.x * .75, pp.y + 1.45, pp.z + a.z * .75, { ry: P.yaw, life: 420, out: true, v: { x: a.x * 18, y: up + 1, z: a.z * 18 }, av: { x: rand(-2, 2), y: 16, z: rand(-2, 2) } });
+      b.thrownT = G.tick; sfx('proj', .9); sfx('whoosh', .7); fx.text(headPos(.3), '서류철 슝!', 'note');
+    } },
+  // 대리 마무리: 어퍼컷(높이 띄운다)
+  upper: { dur: .5, at: .45, spd: .3, k: 'a', hit() { const f = fwd(); P.body.velocity.y = Math.max(P.body.velocity.y, 3); strike(.65, 1.0, .9, 22, f.x * 1.5, 11, f.z * 1.5, { snd: 'upper', stop: 75, shake: .2, word: '어퍼컷!' }); } },
+  // 대리 강타: 돌려차기(옆으로 넓게)
+  round: { dur: .56, at: .5, spd: .35, start() { sfx('whoosh', .7); }, hit() { const f = fwd(), rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw); strike(.75, .85, 1.3, 32, f.x * 7 - rx * 4, 4.5, f.z * 7 - rz * 4, { snd: 'kickh', stop: 65, word: '돌려차기!' }); } },
+  // 과장 마무리: 박치기
+  headbutt: { dur: .5, at: .45, spd: .2, k: 'a', hit() { const f = fwd(), v = P.body.velocity; v.x += f.x * 4; v.z += f.z * 4; if (strike(.6, 1.45, .85, 34, f.x * 10, 5, f.z * 10, { snd: 'bonk', stop: 85, shake: .26, word: '박치기!', pk: 1.3 })) fx.bitsAt(headPos(-.15), 8, '#ffd84d', 2, 2); } },
+  // 과장 강타: 배치기(앞쪽 넓게 밀어낸다)
+  belly: { dur: .6, at: .45, spd: .25, hit() { const pp = P.body.position, f = fwd(); sfx('belly', .9); strike(.45, .8, 1.9, 26, 10, 5, 0, { radial: true, max: 10, stop: 70, shake: .3, miss: false, word: '배치기!' }); fx.burst({ x: pp.x + f.x * .5, y: .1, z: pp.z + f.z * .5 }, 1.1); } },
+  // 차장 마무리: 수도 내리치기
+  chop: { dur: .5, at: .45, spd: .3, k: 'a', hit() { const f = fwd(); strike(.8, .8, .9, 26, f.x * 9, 2, f.z * 9, { snd: 'chop', stop: 70, shake: .2, word: '수도!' }); } },
+  // 차장 강타: 골프 스윙(멀리 높이 날린다)
+  golf: { dur: .72, at: .5, spd: .2, start() { sfx('whoosh', .5); }, hit() { const f = fwd(), L = P.ch.launch || 1; strike(1.0, .7, 1.15, 34, f.x * 12 * L, 9, f.z * 12 * L, { snd: 'golf', stop: 80, shake: .24, word: '나이스 샷!', pk: 1.3 }); } },
+  // 자유인 마무리: 한 바퀴 돌며 뒤돌려차기(둘레 전부)
+  spinkick: { dur: .56, at: .55, spd: .3, k: 'a', start() { sfx('whoosh', .6); }, hit() { strike(0, .9, 1.55, 24, 10, 5, 0, { radial: true, max: 8, snd: 'kickh', stop: 70, shake: .22, word: '뒤돌려차기!' }); } },
+  // 자유인 강타: 앞으로 날아 두 발 드롭킥
+  dropkick: { dur: .7, at: 2, spd: 0, drive: true, sweep: [.22, .68], start(A) { const f = fwd(); A.dx = f.x; A.dz = f.z; P.body.velocity.y = 5.2; sfx('whoosh', .8); },
+    tick(A) { const v = P.body.velocity; if (A.t < .62 && !A.done) { v.x = A.dx * 7.5; v.z = A.dz * 7.5; } else { v.x *= .82; v.z *= .82; } },
+    hit(A) { const n = strike(.75, .95, 1.0, 36, A.dx * 13, 5, A.dz * 13, { snd: 'kickh', stop: 85, shake: .28, miss: false, word: '드롭킥!', pk: 1.3 }); if (n) { const v = P.body.velocity; v.x = -A.dx * 2; v.z = -A.dz * 2; v.y = Math.max(v.y, 2.5); } return n; },
+    end() { P.lag = 10; } },
+  // 모아치기: 강타를 0.6초 넘게 모았다가 놓으면 두 바퀴 돌며 둘레를 날린다(무기를 들었으면 무기로)
+  spin: { dur: .8, at: 2, spd: .55, start() { sfx('spin'); fx.text(headPos(.35), '모아치기!', 'word big'); },
+    tick(A) {
+      if (!((A.n === 0 && A.t >= .3) || (A.n === 1 && A.t >= .62))) return;
+      A.n++; const k = A.chg || 1, W = P.wdef, pp = P.body.position, r = 1.8 + (W ? W.reach * .4 : 0);
+      const n = strike(0, .9, r, (W ? W.dmg * 1.6 : 26) * k, 11 * k, 6, 0, { radial: true, max: 12, snd: A.n === 2 ? 'kickh' : 'smack', vol: .8, stop: A.n === 2 ? 90 : 45, shake: .3, brk: true, pk: 1.3 * k, miss: false });
+      fx.burst({ x: pp.x, y: .1, z: pp.z }, 1.2 * k); if (n && W) wear();
+    } },
+  // 달리다가 때리기: 어깨로 들이받는다(처음 맞은 것에서 멈춘다)
+  dash: { dur: .5, at: 2, spd: 0, drive: true, k: 'a', sweep: [.06, .8], start(A) { const f = fwd(); A.dx = f.x; A.dz = f.z; sfx('dash'); fx.cloud(feet(), 2, '#d8d0bf', .5, .2); },
+    tick(A) { const v = P.body.velocity; if (!A.done) { const s = A.t < .8 ? 12 * (1 - A.t * .45) : 3; v.x = A.dx * s; v.z = A.dz * s; if (G.tick % 3 === 0) fx.bitsAt(feet(), 3, '#d8d0bf', 1.5, 1); } else { v.x *= .8; v.z *= .8; } },
+    hit(A) { const n = strike(.5, 1.0, .9, 30, A.dx * 13, 5.5, A.dz * 13, { snd: 'dashhit', stop: 80, shake: .28, miss: false, word: '돌진!', pk: 1.3 }); if (n) { const v = P.body.velocity; v.x = -A.dx * 2.5; v.z = -A.dz * 2.5; A.t = Math.max(A.t, .8); } return n; } },
+  // 공중에서 때리기: 비스듬히 내려꽂는 날아차기(자세만, 움직임은 diveTick)
+  dive: { dur: 99, at: 2, spd: 1, drive: true, k: 'a' },
+};
+function startMove(type, o) {
+  const M = MV[type]; if (!M) return null;
+  const rate = P.ch.rate * (P.rush > 0 ? 1.8 : 1), A = { type, t: 0, dur: M.dur / (M.fast ? rate : Math.sqrt(rate)), k: M.k || 'b', hit: false, n: 0, done: false };
+  if (o) Object.assign(A, o);
+  P.atk = A; if (M.start) M.start(A); return A;
+}
+function startDive() {
+  const f = fwd(), v = P.body.velocity; P.dive = true; P.ddx = f.x; P.ddz = f.z; v.x = f.x * 8.5; v.z = f.z * 8.5; v.y = Math.min(v.y, 0) - 8.5;
+  P.atk = { type: 'dive', t: 0, dur: 99, k: 'a', hit: false, n: 0, done: false }; sfx('dive');
+}
+// 날아가는 동안: 무언가에 닿으면 차고 튕겨 오른다
+function diveTick() {
+  const v = P.body.velocity; v.x = P.ddx * 8.5; v.z = P.ddz * 8.5;
+  if (G.tick & 1) return;
+  if (strike(.45, .35, .7, 24, P.ddx * 9, 6, P.ddz * 9, { tall: .5, snd: 'kickh', stop: 60, shake: .2, miss: false, word: '날아차기!' })) {
+    P.dive = false; if (P.atk && P.atk.type === 'dive') P.atk = null; v.y = 5.5; v.x = -P.ddx * 2; v.z = -P.ddz * 2;
+  }
+}
+// 닿은 것 없이 내려앉으면 둘레를 쿵(작은 범위)
+function diveLand() {
+  P.dive = false; if (P.atk && P.atk.type === 'dive') P.atk = null;
+  const pp = P.body.position, hits = attack({ x: pp.x, y: .45, z: pp.z }, 1.7, 22 * P.ch.pow, { x: 6.5, y: 5, z: 6.5 }, { radial: true, heavy: true, max: 8, tall: .5, pk: P.ch.pow, brk: true });
+  addCombo(hits.length); G.rage = Math.min(100, G.rage + hits.length * 2);
+  fx.cloud({ x: pp.x, y: .2, z: pp.z }, 5, '#b9b2a2', .8, .7); fx.burst({ x: pp.x, y: .1, z: pp.z }, .9); sfx('stomp'); G.shake = Math.max(G.shake, .24); G.hitstop = Math.max(G.hitstop, 50); buzz(30); P.lag = 9;
+}
+// 구르기: 0.4초 동안 맞지 않는다. 방향 입력이 없으면 뒤로
+function startRoll(wx, wz, l) {
+  let dx = wx, dz = wz; P.rollBack = l < .2;
+  if (P.rollBack) { dx = -Math.sin(P.yaw); dz = -Math.cos(P.yaw); } else { const k = Math.hypot(dx, dz) || 1; dx /= k; dz /= k; P.yaw = Math.atan2(dx, dz); }
+  P.rdx = dx; P.rdz = dz; P.roll = P.rollMax = 24; P.inv = Math.max(P.inv, 26); P.rollCd = 40;
+  P.atk = null; P.bPend = false; P.dive = false; P.slam = false; P.stag = 0;
+  sfx('dodge'); fx.bitsAt(feet(), 8, '#d8d0bf', 2, 1);
+}
+// 강타를 누르고 있는 동안: 모이는 표시와 소리
+function chargeTick(dt) {
+  const was = P.bHold; P.bHold += dt;
+  if (P.bHold < .2) return;
+  const pp = P.body.position, k = Math.min(1, P.bHold / .6);
+  if (G.tick % 6 === 0) fx.bitsAt({ x: pp.x + rand(-.4, .4), y: .2, z: pp.z + rand(-.4, .4) }, 2, k >= 1 ? '#ffd84d' : '#ffffff', .6, 3);
+  if (k < 1 && G.tick % 9 === 0) sfx('chargeup', .7, k);
+  if (was < .6 && P.bHold >= .6) { sfx('chargefull'); fx.text(headPos(.3), '모았다!', 'note'); fx.burst({ x: pp.x, y: 1, z: pp.z }, .5, false); buzz(15); }
+  if (k >= 1 && G.tick % 20 === 0) fx.cloud({ x: pp.x, y: 1, z: pp.z }, 1, '#fff3b0', .6, .3);
+}
+
+// ───── 사람 들어 올리기 · 던지기 · 내려놓기
+function grabPerson(n) {
+  if (!G.people || !G.people.grab || !G.people.grab(n)) return false;
+  P.grab = n; P.cand = P.pcand = null; P.atk = null; P.bPend = false; sfx('grab'); buzz(15); return true;
+}
+// soft = 앞에 내려놓기, 아니면 화면이 보는 쪽으로 던진다(다른 사람·물건을 쓰러뜨린다)
+export function tossPerson(soft) {
+  const n = P.grab; P.grab = null; if (!n || !G.people || !P.body) return;
+  const pp = P.body.position;
+  if (soft) { const f = fwd(); G.people.drop(n, pp.x + f.x * .9, pp.z + f.z * .9); return; }
+  const a = aim(), k = clamp(P.ch.thr || 1, 1, 1.5); P.yaw = Math.atan2(a.x, a.z);
+  G.people.toss(n, a.x * 12 * k, 4 + Math.max(0, .5 - CAM.pitch) * 6, a.z * 12 * k);
+  P.atk = { type: 'swing', t: .35, dur: .3, hit: true }; G.shake = Math.max(G.shake, .15); buzz(25);
+}
+
+// ───── 결전용 체력(G.combat일 때만 다친다)
+const KB = { punch: 4.5, kick: 4, heavy: 7.5, blast: 6, proj: 3, push: 6, roar: 7 }, OUCH = ['아야!', '윽!', '으악!', '억!'];
+// from = 때린 쪽 {x, z}, kind = punch·kick·heavy·blast·proj·push·roar. dmg 0 = 밀치기만. 다쳤으면 true
+export function hurtPlayer(dmg, from, kind = 'punch') {
+  if (!G.combat || !P.active || !P.body || P.ko || P.lock > 0 || P.auto) return false;
+  const pp = P.body.position, v = P.body.velocity, sx = from ? from.x : pp.x - Math.sin(P.yaw), sz = from ? from.z : pp.z - Math.cos(P.yaw);
+  let ux = pp.x - sx, uz = pp.z - sz; const l = Math.hypot(ux, uz) || 1; ux /= l; uz /= l;
+  if (P.inv > 0) { if (P.roll > 0 && G.tick - (P.missT || -99) > 20) { P.missT = G.tick; fx.text(headPos(.2), '회피!', 'note'); } return false; }
+  // 강타를 모으는 자세로 앞쪽에서 오는 공격은 막는다(큰 공격·폭발은 못 막는다)
+  const front = -(ux * Math.sin(P.yaw) + uz * Math.cos(P.yaw)) > .35;
+  if (dmg > 0 && P.bPend && P.bHold > .1 && front && kind !== 'heavy' && kind !== 'blast' && kind !== 'roar') {
+    v.x += ux * 3; v.z += uz * 3; P.inv = 14; P.bHold = Math.min(P.bHold, .3);
+    const c = headPos(-.6); pow(c, { x: ux, z: uz }, .8, '#9fd8ff'); fx.sparks(c, 10); fx.text(headPos(.2), '막았다!', 'word'); sfx('block'); G.shake = Math.max(G.shake, .1); buzz(15);
+    return false;
+  }
+  if (P.seated) standUp(); if (P.ride) unmount(); if (P.carry && P.carry !== true) throwCarry(true); if (P.grab) tossPerson(true);
+  P.atk = null; P.bPend = false; P.dive = false; P.slam = false; P.roll = 0;
+  const kb = KB[kind] || 4.5; v.x = ux * kb; v.z = uz * kb; v.y = Math.max(v.y, kind === 'heavy' || kind === 'roar' ? 4.5 : 2.6);
+  P.yaw = Math.atan2(-ux, -uz);
+  if (!(dmg > 0)) { P.stag = Math.max(P.stag, 12); return true; }
+  P.hp = Math.max(0, P.hp - dmg); P.stag = kind === 'heavy' || kind === 'blast' ? 30 : 18; P.inv = 38; P.blink = 38; P.hurtF = 40;
+  const c = headPos(-.65); hurtFlash(dmg / 22); pow(c, { x: ux, z: uz }, .9, '#ff7a6a'); fx.bitsAt(c, 10, '#ffffff', 4, 3);
+  fx.text(headPos(.25), pick(OUCH) + ' -' + Math.round(dmg), 'word');
+  sfx('hurt'); G.shake = Math.max(G.shake, .28); G.hitstop = Math.max(G.hitstop, 70); buzz([30, 20, 50]);
+  if (P.hp <= 0) knockOut();
+  return true;
+}
+function knockOut() {
+  P.ko = true; P.koT = 0; P.stag = 0; P.inv = 0; P.blink = 0; P.bPend = false; P.lag = 0;
+  fx.text(headPos(.3), '으윽… 퇴근하고 싶다', 'word big'); sfx('ko'); slow(.35, 50); G.flash = Math.max(G.flash || 0, 4);
+  // 쓰러졌다는 알림은 이번 화면 계산이 끝난 뒤 딱 한 번
+  if (!P.koSent) { P.koSent = true; const f = () => { if (G.onPlayerKO) G.onPlayerKO(); }; if (typeof queueMicrotask === 'function') queueMicrotask(f); else setTimeout(f, 0); }
+}
+// 체력을 채우고 일어난다(잠깐 무적)
+export function healPlayer() {
+  if (!P.active) return;
+  P.hp = P.maxHp || 100; P.ko = false; P.koSent = false; P.stag = 0; P.lag = 0; P.inv = 60; P.blink = 0; P.hurtF = 0; hurtClear();
+  if (P.body) P.body.velocity.set(0, 0, 0);
+}
+
 function special() {
-  const sp = P.ch.sp;
-  G.rage = 0; G.hitstop = 110; G.flash = 6; sfx('special'); fx.text(headPos(.4), sp.name + '!', 'word big'); buzz([40, 30, 80]);
-  if (sp.type === 'quake') { for (let i = 0; i < sp.n; i++) later(3 + i * 26, () => { const q = P.body.position; explode({ x: q.x, y: .2, z: q.z }, 7.5, sp.dmg, 9); fx.cloud({ x: q.x, y: .3, z: q.z }, 10, '#b9b2a2', 1.2, 1.5); sfx('boom'); }); if (sp.slow) later(5, () => slow(.3, 100)); }
-  else if (sp.type === 'rush') P.rush = 480;
+  const sp = P.ch.sp, pp = P.body.position;
+  G.rage = 0; G.hitstop = 110; G.flash = 6; sfx('special'); fx.text(headPos(.4), sp.name + '!', 'word big'); buzz([40, 30, 80]); P.bPend = false;
+  if (sp.type === 'quake') {
+    // 책상 쾅(한 번, 크게 띄움) · 지진(세 번)
+    for (let i = 0; i < sp.n; i++) later(3 + i * 26, () => { const q = P.body.position, c = { x: q.x, y: .2, z: q.z }; explode(c, 7.5, sp.dmg, sp.slow ? 12 : 9); fx.cloud({ x: q.x, y: .3, z: q.z }, 10, '#b9b2a2', 1.2, 1.5); fx.burst(c, 2.2 + i * .5); sfx('boom'); sfx('stomp', .8); G.shake = Math.max(G.shake, .45); P.atk = { type: 'smash', t: .38, dur: .3, hit: true }; });
+    if (sp.slow) later(5, () => slow(.3, 100));
+  }
+  else if (sp.type === 'rush') { P.rush = 480; fx.cloud({ x: pp.x, y: 1, z: pp.z }, 8, '#7a4a26', .8, .5); fx.text(headPos(.8), '카페인 충전!', 'note'); }
   else if (sp.type === 'storm') P.storm = 210;
-  else if (sp.type === 'line') for (let i = 0; i < 9; i++) later(3 + i * 5, () => { const q = P.body.position, a = aim(); P.yaw = Math.atan2(a.x, a.z); const b = spawn('ball', q.x + a.x * .7 + rand(-.3, .3), 1.1 + rand(-.3, .4), q.z + a.z * .7 + rand(-.3, .3), { mass: 4, life: 240, v: { x: a.x * 30, y: 1, z: a.z * 30 } }); b.thrownT = G.tick; explode({ x: q.x + a.x * 2.2, y: 1, z: q.z + a.z * 2.2 }, 1.6, 30, 10); sfx('plastic', .7); });
-  else if (sp.type === 'rain') for (let i = 0; i < 11; i++) later(6 + i * 7, () => { const q = P.body.position, c = { x: clamp(q.x + rand(-6, 6), -13, 13), y: .4, z: clamp(q.z + rand(-6, 6), -8, 8) }; fx.sheet({ x: c.x, y: 2.4, z: c.z }, 6, '#ffffff', 2); explode(c, 3, 55, 9); fx.cloud(c, 6, '#ffffff', 1, .6); sfx('boom', .7); });
+  else if (sp.type === 'line') {
+    for (let i = 0; i < 9; i++) later(3 + i * 5, () => { const q = P.body.position, a = aim(); P.yaw = Math.atan2(a.x, a.z); const b = spawn('ball', q.x + a.x * .7 + rand(-.3, .3), 1.1 + rand(-.3, .4), q.z + a.z * .7 + rand(-.3, .3), { mass: 4, life: 240, v: { x: a.x * 30, y: 1, z: a.z * 30 } }); b.thrownT = G.tick; explode({ x: q.x + a.x * 2.2, y: 1, z: q.z + a.z * 2.2 }, 1.6, 30, 10); sfx('plastic', .7); P.atk = { type: 'golf', t: .5, dur: .2, hit: true }; });
+    // 마지막 한 방: 8m 앞이 홀컵처럼 터진다
+    later(54, () => { const q = P.body.position, a = aim(), c = { x: clamp(q.x + a.x * 8, -13, 13), y: .5, z: clamp(q.z + a.z * 8, -8.5, 8.5) }; explode(c, 3.2, 60, 12); fx.burst(c, 1.8); fx.cloud(c, 8, '#ffffff', 1.1, .6); fx.text({ x: c.x, y: 1.8, z: c.z }, '홀인원!', 'word big'); sfx('golf'); sfx('boom', .8); G.shake = Math.max(G.shake, .4); });
+  }
+  else if (sp.type === 'rain') {
+    for (let i = 0; i < 11; i++) later(6 + i * 7, () => { const q = P.body.position, c = { x: clamp(q.x + rand(-6, 6), -13, 13), y: .4, z: clamp(q.z + rand(-6, 6), -8, 8) }; fx.sheet({ x: c.x, y: 2.4, z: c.z }, 6, '#ffffff', 2); explode(c, 3, 55, 9); fx.cloud(c, 6, '#ffffff', 1, .6); sfx('boom', .7); });
+    // 마지막: 내 둘레에 사직서 한 뭉치
+    later(96, () => { const q = P.body.position, c = { x: q.x, y: .4, z: q.z }; fx.sheet({ x: c.x, y: 2.6, z: c.z }, 24, '#ffffff', 5); explode(c, 5.5, 70, 12); fx.burst(c, 2.4); fx.text({ x: c.x, y: 2.2, z: c.z }, '사직서 수리!', 'word big'); sfx('boom'); G.shake = Math.max(G.shake, .5); G.flash = 5; });
+  }
 }
 
 // 든 물건은 머리 위에 붙어 다닌다
@@ -435,12 +758,17 @@ export function updatePlayer(dt) {
   if (!locked) { CAM.yaw -= I.lookX; CAM.pitch = clamp(CAM.pitch + I.lookY, -.2, 1.15); }
   I.lookX = I.lookY = 0;
   if (P.ghost > 0 && --P.ghost === 0) setMask();
+  if (P.inv > 0) P.inv--; if (P.blink > 0) P.blink--; if (P.hurtF > 0) P.hurtF--; if (P.rollCd > 0) P.rollCd--; if (P.cdD > 0) P.cdD--;
+  lowHp(G.combat && !P.ko && P.hp < 35 ? 1 - P.hp / 35 : 0);
   // 고개: 할 일 쪽을 본다(±40도)
   let lk = 0; if (G.lookAt && !P.seated) { const t = Math.atan2(G.lookAt.x - pp.x, G.lookAt.z - pp.z); let d = t - P.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); lk = clamp(d, -.7, .7); }
   P.look = lerp(P.look, lk, .08);
   const done = () => { P.pj = I.jump; P.pa = I.a; P.pb = I.b; P.pc = I.c; P.pe = I.e; };
+  // 쓰러졌을 때: 누운 채로 아무것도 못 한다(healPlayer로 일어난다)
+  if (P.ko) { P.koT++; v.x *= .85; v.z *= .85; P.cand = P.pcand = null; P.speed = 0; P.atk = null; P.bPend = false; done(); return; }
+  if (P.grab && (P.ride || P.seated)) tossPerson(true);
   // 바퀴의자·카트·지게차를 탄 동안에는 운전만 한다
-  if (P.ride) { updateRide(dt, locked); P.cand = null; done(); return; }
+  if (P.ride) { P.bPend = false; P.roll = 0; updateRide(dt, locked); P.cand = null; done(); return; }
   // 앉아 있을 때: 움직이거나 때리면 일어난다. E는 할 일에만 쓴다
   if (P.seated) {
     const c = P.seated;
@@ -467,38 +795,76 @@ export function updatePlayer(dt) {
     const hs = Math.hypot(v.x, v.z); P.speed = lerp(P.speed, clamp(hs / 5.5, 0, 1.2), .25); if (hs > .3) P.walk += hs * dt * 2.6;
     holdCarry(pp); done(); return;
   }
-  let mx = locked ? 0 : I.mx, mz = locked ? 0 : I.mz; const l = Math.hypot(mx, mz); if (l > 1) { mx /= l; mz /= l; }
+  // 맞고 비틀거리거나(stag) 착지 직후(lag)에는 조작이 잠깐 안 된다
+  if (P.stag > 0) P.stag--; if (P.lag > 0) P.lag--;
+  const hold = locked || P.stag > 0 || P.lag > 0;
+  let mx = hold ? 0 : I.mx, mz = hold ? 0 : I.mz; const l = Math.hypot(mx, mz); if (l > 1) { mx /= l; mz /= l; }
   const a = aim(), wx = a.x * mz + Math.cos(CAM.yaw) * mx, wz = a.z * mz - Math.sin(CAM.yaw) * mx;
-  const spd = ch.spd * (P.rush > 0 ? 1.7 : 1) * (P.carry ? .85 : 1) * (P.slam ? .2 : 1) * (P.atk && P.atk.k === 'b' ? .35 : 1);
+  const A0 = P.atk, M0 = A0 ? MV[A0.type] : null;
+  const spd = ch.spd * (P.rush > 0 ? 1.7 : 1) * (P.carry || P.grab ? .85 : 1) * (P.slam ? .2 : 1) * (M0 ? M0.spd : A0 && A0.k === 'b' ? .35 : 1) * (P.bPend ? .3 : 1);
   // 소화기를 뿜는 동안엔 반동에 밀리고, 스프링클러로 젖은 바닥에서는 미끄러진다
-  const grip = P.spraying ? .04 : TOY.wet && onG ? .08 : .3;
-  v.x = lerp(v.x, wx * spd, grip); v.z = lerp(v.z, wz * spd, grip);
-  if (l > .1) P.yaw = angLerp(P.yaw, Math.atan2(wx, wz), .25);
+  const grip = P.spraying ? .04 : P.stag > 0 ? .07 : TOY.wet && onG ? .08 : .3;
+  if (P.roll > 0) { P.roll--; const k = P.roll > 5 ? 8.2 : 3.5; v.x = P.rdx * k; v.z = P.rdz * k; }
+  else if (P.dive) { v.x = P.ddx * 8.5; v.z = P.ddz * 8.5; }
+  else if (!(M0 && M0.drive)) { v.x = lerp(v.x, wx * spd, grip); v.z = lerp(v.z, wz * spd, grip); if (l > .1) P.yaw = angLerp(P.yaw, Math.atan2(wx, wz), P.bPend ? .08 : .25); }
   if (onG) {
-    if (P.slam) { P.slam = false; const hits = attack({ x: pp.x, y: .4, z: pp.z }, 2.7, 30 * ch.pow, { x: 5, y: 6.5, z: 5 }, { max: 12, radial: true, heavy: true, tall: .5 }); addCombo(hits.length); G.rage = Math.min(100, G.rage + hits.length * 2); G.shake = .3; G.hitstop = 70; sfx('wood'); sfx('boom', .5); fx.cloud({ x: pp.x, y: .2, z: pp.z }, 6, '#b9b2a2', .9, .8); buzz(40); }
+    if (P.slam) { P.slam = false; const hits = attack({ x: pp.x, y: .4, z: pp.z }, 2.7, 30 * ch.pow, { x: 5, y: 6.5, z: 5 }, { max: 12, radial: true, heavy: true, tall: .5, pk: ch.pow * 1.2, brk: true }); addCombo(hits.length); G.rage = Math.min(100, G.rage + hits.length * 2); G.shake = .3; G.hitstop = 70; sfx('stomp', .7); sfx('boom', .5); fx.cloud({ x: pp.x, y: .2, z: pp.z }, 6, '#b9b2a2', .9, .8); buzz(40); }
+    if (P.dive) diveLand();
     P.jumps = 0; P.air = 0;
-  } else P.air++;
-  if (I.jump && !P.pj && !locked) {
-    if (onG) { v.y = ch.jump; P.jumps = 1; sfx('jump'); } else if (ch.dj && P.jumps < 2) { v.y = ch.jump * .92; P.jumps = 2; sfx('jump'); fx.bitsAt({ x: pp.x, y: pp.y, z: pp.z }, 6, '#ffffff', 2, 0); }
+  } else { P.air++; if (P.dive) { if (P.air > 100) { P.dive = false; if (P.atk && P.atk.type === 'dive') P.atk = null; } else diveTick(); } }
+  // 달리는 중인지(돌진 공격): 빠르게 0.3초 넘게 달렸으면
+  const hs0 = Math.hypot(v.x, v.z);
+  P.runT = onG && !P.atk && !P.bPend && l > .6 && hs0 > ch.spd * .72 ? P.runT + dt : 0;
+  // 점프 · 구르기(강타를 누른 채 점프, 또는 점프하자마자 0.15초 안에 강타)
+  const jPress = I.jump && !P.pj && !hold, bPress = I.b && !P.pb && !hold, aPress = I.a && !P.pa;
+  const canRoll = P.rollCd <= 0 && !P.carry && !P.grab && !P.dive;
+  let rolled = false;
+  if (jPress && onG && canRoll && (P.bPend || I.b)) { startRoll(wx, wz, l); rolled = true; }
+  else if (bPress && canRoll && P.jumps === 1 && G.tick - P.jT < 10 && P.air < 12) { v.y = Math.min(v.y, 0) - 3; startRoll(wx, wz, l); rolled = true; }
+  else if (jPress) {
+    if (onG) { v.y = ch.jump; P.jumps = 1; P.jT = G.tick; sfx('jump'); } else if (ch.dj && P.jumps < 2) { v.y = ch.jump * .92; P.jumps = 2; sfx('jump'); fx.bitsAt({ x: pp.x, y: pp.y, z: pp.z }, 6, '#ffffff', 2, 0); }
   }
-  if (P.atk) { P.atk.t += dt / P.atk.dur; if (!P.atk.hit && P.atk.t >= .45) { P.atk.hit = true; doHit(P.atk); } if (P.atk.t >= 1) P.atk = null; }
+  // 동작 진행
+  if (P.atk) {
+    const A = P.atk, M = MV[A.type]; A.t += dt / A.dur;
+    if (M) {
+      if (M.tick) M.tick(A, dt);
+      if (M.sweep && !A.done && A.t >= M.sweep[0] && A.t <= M.sweep[1] && (G.tick & 1) === 0 && M.hit(A)) A.done = true;
+      if (!A.hit && A.t >= M.at) { A.hit = true; if (M.hit && !M.sweep) M.hit(A); }
+    } else if (!A.hit && A.t >= .45) { A.hit = true; doHit(A); }
+    if (A.t >= 1 && P.atk === A) { P.atk = null; if (M && M.end) M.end(A); }
+  }
   P.cdB--; P.cdS = (P.cdS || 0) - 1;
+  // 강타 모으기: 짧게 떼면 강타, 0.6초 넘게 모았다 떼면 모아치기
+  if (P.bPend) {
+    if (hold || P.carry || P.grab || P.roll > 0 || (!onG && P.air > 8)) P.bPend = false;
+    else if (I.b) chargeTick(dt);
+    else { P.bPend = false; if (P.bHold >= .6) { autoAim(); startMove('spin', { chg: clamp(.9 + P.bHold * .35, 1, 1.45) }); } else heavyAtk(); }
+  }
   const spray = !!(P.wdef && P.wdef.spray), loud = !!(P.wdef && P.wdef.shout);
-  if (spray && !P.carry) sprayTick(dt, locked); else P.spraying = false;
-  if (!locked && !P.atk) {
-    if (P.carry) { if ((I.a && !P.pa) || (I.b && !P.pb)) throwCarry(); }
-    else if (I.b && !P.pb && P.cdB <= 0) { if (!onG && P.air > 4) { P.slam = true; v.y = -17; sfx('whoosh'); } else startAtk('b'); }
+  if (spray && !P.carry && !P.grab) sprayTick(dt, hold); else P.spraying = false;
+  if (!hold && !P.atk && P.roll <= 0 && !rolled) {
+    if (P.grab) { if (aPress || bPress) tossPerson(); }
+    else if (P.carry) { if (aPress || bPress) throwCarry(); }
+    else if (bPress && P.cdB <= 0 && !P.bPend) { if (!onG) { P.slam = true; v.y = -17; sfx('whoosh'); } else { P.bPend = true; P.bHold = 0; } }
     // 확성기: 누를 때마다 외치기(꾹 누르고 있어도 잠깐씩 쉰다)
     else if (I.a && loud) { if (P.cdS <= 0) { shout(); P.cdS = 42; } }
-    else if (I.a && !spray) startAtk('a');
+    else if (I.a && !spray && !P.bPend) {
+      // 공중에서 = 날아차기, 달리다가 = 돌진, 그 밖 = 연타
+      if (aPress && !onG && P.air > 6 && !P.dive) startDive();
+      else if (aPress && onG && P.cdD <= 0 && P.runT > (P.rush > 0 ? .1 : .3)) { P.cdD = 40; startMove('dash'); }
+      else if (onG || !P.dive) startAtk('a');
+    }
   }
-  if (I.c && !P.pc && G.rage >= 100 && !locked) special();
-  // E: 할 일 → 내려놓기 → 집기/장착/엎기
-  if (G.tick % 5 === 0) P.cand = P.carry ? null : findCand();
+  if (I.c && !P.pc && G.rage >= 100 && !locked && !P.stag) special();
+  // E: 할 일 → 사람 내려놓기 → 물건 내려놓기 → 사람 들기(물건보다 가까울 때) → 집기/장착/엎기
+  if (G.tick % 5 === 0) { const busy = P.carry || P.grab; P.cand = busy ? null : findCand(); P.pcand = busy ? null : findPerson(); }
   const ePress = I.e && !P.pe;
-  if (!locked) {
+  if (!hold) {
     if (G.interact && G.interact(ePress, I.e, dt)) { P.eHold = 0; }
+    else if (ePress && P.grab) tossPerson(true);
     else if (ePress && P.carry) throwCarry(true);
+    else if (ePress && P.pcand && !P.atk && P.roll <= 0 && (!P.cand || P.cand.dead || (P.cand !== G.want && P.pd < P.cd - .15)) && grabPerson(P.pcand)) P.eHold = 0;
     else if (P.cand && !P.cand.dead) {
       const c = P.cand, d = c.def;
       if (d.use) { if (ePress) { useProp(c); P.cand = null; } }
@@ -510,8 +876,16 @@ export function updatePlayer(dt) {
     } else P.eHold = 0;
   }
   holdCarry(pp);
-  if (P.rush > 0) { P.rush--; if (G.tick % 3 === 0) fx.bitsAt({ x: pp.x, y: .1, z: pp.z }, 2, '#f2b705', 1, 1); }
-  if (P.storm > 0) { P.storm--; if (P.storm % 8 === 0) { fx.sheet({ x: pp.x + rand(-2, 2), y: 1.2, z: pp.z + rand(-2, 2) }, 8, '#ffffff', 5); const h = attack({ x: pp.x, y: 1, z: pp.z }, 4.6, 10, { x: 3, y: 2.5, z: 3 }, { max: 14, radial: true, tall: 1 }); addCombo(Math.min(3, h.length)); sfx('paper', .4); } }
+  if (P.rush > 0) {
+    P.rush--; if (G.tick % 3 === 0) fx.bitsAt({ x: pp.x, y: .1, z: pp.z }, 2, '#f2b705', 1, 1);
+    // 믹스커피 폭주: 달리기만 해도 앞을 들이받는다
+    if (!P.atk && onG && hs0 > 4.5 && G.tick % 8 === 0) { const f = fwd(); strike(.45, 1.0, .7, 12, f.x * 9, 4, f.z * 9, { snd: 'dashhit', vol: .45, stop: 30, shake: .1, miss: false }); }
+  }
+  if (P.storm > 0) {
+    P.storm--; if (P.storm % 8 === 0) { fx.sheet({ x: pp.x + rand(-2, 2), y: 1.2, z: pp.z + rand(-2, 2) }, 8, '#ffffff', 5); const h = attack({ x: pp.x, y: 1, z: pp.z }, 4.6, 10, { x: 3, y: 2.5, z: 3 }, { max: 14, radial: true, tall: 1, pk: .6 }); addCombo(Math.min(3, h.length)); sfx('paper', .4); }
+    // 서류 폭풍 끝: 한꺼번에 터진다
+    if (P.storm === 0) { const c = { x: pp.x, y: .8, z: pp.z }; explode(c, 5, 35, 11); fx.sheet({ x: c.x, y: 1.6, z: c.z }, 30, '#ffffff', 6); fx.burst(c, 1.8); fx.text({ x: c.x, y: 2.3, z: c.z }, '결재 완료!', 'word big'); sfx('paper'); sfx('boom', .7); G.shake = Math.max(G.shake, .35); }
+  }
   const hs = Math.hypot(v.x, v.z); P.speed = lerp(P.speed, clamp(hs / 5.5, 0, 1.2), .25); if (onG && hs > .4) { P.walk += hs * dt * 2.6; if (Math.sin(P.walk) * Math.sin(P.walk - hs * dt * 2.6) < 0) sfx('step', .25); }
   if (pp.y < -2) { b.position.set(0, .5, 5); v.set(0, 0, 0); }
   done();
@@ -546,15 +920,27 @@ export function faceCam(dur = 1.1) {
 }
 export function renderPlayer(dt = 1 / 60) {
   if (P.active && P.R) {
-    const pp = P.body.position, R = P.R;
-    R.root.position.set(pp.x, pp.y, pp.z); R.root.rotation.y = P.yaw;
-    P.blinkT -= dt; let ex = P.expr;
+    const pp = P.body.position, R = P.R, a = P.atk;
+    P.koK = lerp(P.koK || 0, P.ko ? 1 : 0, Math.min(1, dt * 8));
+    // 몸 전체 회전: 구르기(엉덩이 높이를 축으로 한 바퀴), 쓰러짐(발을 축으로 뒤로 눕기), 도는 기술(몸 방향)
+    let tip = 0, piv = 0, yo = 0;
+    if (P.roll > 0) { tip = (P.rollBack ? -1 : 1) * (1 - P.roll / (P.rollMax || 24)) * 6.283; piv = .5; }
+    else if (P.koK > .01) tip = -1.5 * P.koK;
+    if (a) { const k = a.t; if (a.type === 'spin') yo = Math.min(1, k / .9) * 12.566; else if (a.type === 'spinkick') yo = sm(Math.min(1, k / .7)) * 6.283; else if (a.type === 'round') yo = -1.1 * Math.sin(Math.min(1, k) * Math.PI); }
+    const ry = P.yaw + yo, stp = Math.sin(tip);
+    if (R.root.rotation.order !== 'YXZ') R.root.rotation.order = 'YXZ';
+    R.root.position.set(pp.x - piv * stp * Math.sin(ry), pp.y + piv * (1 - Math.cos(tip)) + .12 * P.koK, pp.z - piv * stp * Math.cos(ry)); R.root.rotation.set(tip, ry, 0);
+    // 맞은 직후 무적인 동안 깜빡인다
+    R.root.visible = !(P.blink > 0 && (P.blink >> 2) % 2 === 1);
+    const golf = !!(a && a.type === 'golf' && !P.weapon); if (golf || R.club) clubMesh(R, golf);
+    P.blinkT -= dt; let ex = P.ko ? 'endureB' : P.hurtF > 0 || P.stag > 0 ? 'endure' : P.expr;
     if (P.blinkT < 0) { if (P.blinkT < -.12) P.blinkT = 2.6 + Math.random() * 2.4; else if (ex === 'normal') ex = 'blink'; else if (ex === 'endure') ex = 'endureB'; }
     if (ex !== R.shown) { R.face.material.map = faceTex(R.L, ex); R.shown = ex; }
     if (P.tremble > 0) { P.tremble--; R.face.position.x = (Math.random() - .5) * .004; } else R.face.position.x = 0;
     R.vein.visible = P.expr === 'endure' || P.expr === 'rage'; if (R.vein.visible) { const k = .08 + Math.sin(performance.now() * .012) * .012; R.vein.scale.set(k, k, 1); }
     const rk = P.ride && P.ride.kind, sitting = !!P.seated || rk === 'chair' || rk === 'fork';
-    poseRig(R, { walk: P.walk, speed: P.onG && !sitting ? P.speed : 0, air: !P.onG && P.air > 5 && !sitting, slam: P.slam, carry: !!P.carry && P.carry !== true, atk: P.atk, t: P.t, seated: sitting, typing: (!!P.seated && P.seated.tag === 'myChair' && P.expr === 'normal') || rk === 'fork', push: rk === 'cart', clench: P.expr === 'endure', cheer: P.cheer, relief: P.expr === 'relief', look: P.look, armed: !!P.weapon });
+    poseRig(R, { walk: P.walk, speed: P.onG && !sitting && !P.ko ? P.speed : 0, air: !P.onG && P.air > 5 && !sitting && !P.roll && !P.ko, slam: P.slam, carry: (!!P.carry && P.carry !== true) || !!P.grab, atk: a, t: P.t, seated: sitting, typing: (!!P.seated && P.seated.tag === 'myChair' && P.expr === 'normal') || rk === 'fork', push: rk === 'cart', clench: P.expr === 'endure', cheer: P.cheer, relief: P.expr === 'relief', look: P.look, armed: !!P.weapon,
+      chg: P.bPend && P.bHold > .12 ? Math.min(1, P.bHold / .6) : 0, roll: P.roll > 0, stag: P.stag > 0 && !P.ko && !P.roll && !sitting ? 1 : 0, ko: P.koK > .01 ? P.koK : 0 });
   }
   const cam = X.camera, m = CAM.mode;
   if (m === 'follow' && P.active) { followPose(des, tgt); cam.position.lerp(des, .5); CAM.look.copy(tgt); }

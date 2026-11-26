@@ -270,5 +270,70 @@ body.phone-l .h-left,body.phone-l .h-right{padding:4px 10px 5px}body.phone-l #ob
 body.phone-p #status{bottom:200px}
 .h-left{flex:0 0 auto;max-width:42vw}
 
+/* ───── 첫 화면: 1분 난동 옆 번외 게임 */
+.t-row #b-rush{width:auto}
+#b-bonus{background:#8fd0ff;font-family:"Black Han Sans";font-weight:400;font-size:21px;padding:6px 14px 8px}#b-bonus small{font-family:"Noto Sans KR";font-weight:900;font-size:12px;margin-left:8px;opacity:.8}
+body.phone-l #b-bonus{font-size:17px;padding:4px 12px 5px}
+@media (max-width:420px){#b-rush small,#b-bonus small{display:block;margin:0}}
+
+/* ───── 층 정복 · 12층 잠금(자물쇠는 도형으로) */
+.padlock{position:absolute;right:-4px;bottom:-4px;width:18px;height:14px;background:#2a2d33;border-radius:3px;border:2px solid #fff}
+.padlock:before{content:"";position:absolute;left:2px;top:-10px;width:10px;height:10px;border:2.5px solid #2a2d33;border-bottom:0;border-radius:7px 7px 0 0;box-sizing:border-box}
+.fl .lv,#el-btns .eb b{position:relative}
+.fl.lock{background:#e7e2d6;cursor:not-allowed}.fl.lock .lv{background:#c3c0b8!important;color:#6b6760}.fl.lock .tx em{color:var(--red);opacity:1;font-weight:900}.fl.lock .gl{background:#7a756c;white-space:normal;max-width:120px;text-align:center;line-height:1.35}
+.fl .cq,#el-btns .cq{display:inline-block;vertical-align:3px;margin-left:6px;font-family:"Noto Sans KR";font-weight:900;font-size:11px;line-height:1.5;color:#fff;background:#b9891d;border-radius:6px;padding:0 6px}
+.fl .bossb{display:inline-block;vertical-align:3px;margin-left:6px;font-family:"Noto Sans KR";font-weight:900;font-size:11px;line-height:1.5;color:#fff;background:var(--red);border-radius:6px;padding:0 6px}
+#el-btns .eb.lock{cursor:not-allowed;background:#d8d4ca}#el-btns .eb.lock b{background:#c3c0b8;color:#6b6760}
+#el-btns .eb .lk{display:block;font-size:10px;font-weight:900;line-height:1.25;color:var(--red)}
+#el-btns .eb .padlock{transform:scale(.8);right:-6px;bottom:-6px}
+#goalt.clear{background:#b9891d}#goalt.clear small{color:#fff3cf}
+
+/* ───── 보스전: 보스 체력(위 가운데) · 내 체력(필살기 막대 위) */
+#boss{position:absolute;left:50%;top:76px;transform:translateX(-50%);width:min(520px,62vw);z-index:1;background:rgba(24,26,32,.86);border-radius:12px;padding:6px 12px 8px;color:#fff;pointer-events:none;backdrop-filter:blur(6px);box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.bs-h{display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:12px;font-weight:900;white-space:nowrap}
+.bs-h b{font-size:16px;color:var(--yellow);overflow:hidden;text-overflow:ellipsis}.bs-h span{background:var(--red);border-radius:6px;padding:0 6px}.bs-h span:empty{display:none}.bs-h em{margin-left:auto;font-style:normal;opacity:.9}
+.bs-bar{height:12px;border-radius:999px;background:rgba(255,255,255,.14);overflow:hidden}
+#bs-hp{height:100%;width:100%;border-radius:999px;background:linear-gradient(90deg,#ff9f43,#e5342b);transition:width .2s}
+#php{position:absolute;right:14px;bottom:54px;width:min(330px,60vw);display:flex;align-items:center;gap:8px;background:rgba(24,26,32,.78);border-radius:999px;padding:5px 12px;color:#fff;font-size:13px;font-weight:900;pointer-events:none;backdrop-filter:blur(6px)}
+#php .bar{height:12px;border:0;background:rgba(255,255,255,.16)}#php .bar>div{background:linear-gradient(90deg,#ff5d7a,#e5342b);transition:width .2s}
+#php b{min-width:30px;text-align:right;font-variant-numeric:tabular-nums}
+#php.low{animation:hpblink .5s steps(2,jump-none) infinite}#php.low .bar>div{background:#ff2a1a}
+@keyframes hpblink{from{box-shadow:0 0 0 2px rgba(255,42,26,.9)}to{box-shadow:0 0 0 2px rgba(255,42,26,0)}}
+body.combat #keys{display:none!important}
+/* 퇴사 처리 */
+#s-ko{background:radial-gradient(ellipse at center,rgba(40,6,6,.55),rgba(15,6,6,.88));align-items:center;justify-content:center;padding:12px;z-index:6}
+.panel.ko{text-align:center;border-color:#2a0e0e;animation:pop .3s}.panel.ko h2{font-size:38px;color:var(--red)}.ko-p{margin:0 0 6px;font-weight:900;font-size:15px}#ko-sub{margin-bottom:12px}
+#ko-leave small{display:block;font-size:11px;font-weight:700;opacity:.65}
+
+/* ───── 번외 게임: 목록 · 큰 시계와 점수 · 결과 카드 */
+#s-bonus,#s-bres{background:rgba(15,17,22,.72);align-items:center;justify-content:center;padding:12px}
+#bn-list{display:grid;gap:8px;margin-bottom:10px}
+.bn-car .lv{background:#c3cad1}.bn-mole .lv{background:#8fd0ff}.bn-punch .lv{background:#ffc7d8}.bn-toss .lv{background:#b8e3b0}
+#bhud{position:absolute;left:50%;top:68px;transform:translateX(-50%);display:flex;align-items:center;gap:12px;background:rgba(24,26,32,.86);border-radius:14px;padding:4px 16px 6px;color:#fff;pointer-events:none;backdrop-filter:blur(6px);font-variant-numeric:tabular-nums;white-space:nowrap;z-index:1}
+#bhud b{font-family:"Black Han Sans";font-weight:400;font-size:40px;line-height:1.05;color:var(--yellow);min-width:1.3em;text-align:center}
+#bhud span{font-weight:900;font-size:17px}
+#bhud.hurry b{color:#ff5d7a;animation:shake .15s infinite}
+body.bonus .h-right{visibility:hidden}
+.bres{text-align:center}.bres .bt{display:block;font-weight:900;color:var(--red);font-size:14px}
+.bres .bs{display:block;font-family:"Black Han Sans";font-weight:400;font-size:clamp(40px,9vw,64px);line-height:1.1;margin:4px 0 2px;font-variant-numeric:tabular-nums}
+.bres .bnew{display:inline-block;background:var(--yellow);border:2.5px solid var(--ink);border-radius:8px;padding:1px 12px;font-weight:900;font-size:14px;transform:rotate(-3deg);animation:pop .3s}
+.bres .bg{font-family:"Black Han Sans";font-size:20px;margin:6px 0 2px}.bres .bb{font-size:13px;font-weight:700;opacity:.75}
+.bres .brow{margin:10px 0 4px;border-top:2px dashed var(--ink);padding-top:6px;text-align:left}.bres .brow .li{display:flex;justify-content:space-between;font-size:14px;padding:2px 0}.bres .brow .li span:last-child{font-weight:900}
+.bres .bm{font-size:12px;opacity:.7;margin:4px 0 8px}
+
+/* 휴대폰: 세로는 보스 막대를 화면 폭으로, 할 일 판·자막을 그 아래로. 내 체력은 조이스틱 위 */
+body.phone-p #boss{top:58px;left:8px;right:8px;width:auto;transform:none;padding:5px 10px 6px}
+body.phone-p.combat #obj{top:112px}body.phone-p.combat #subt{top:162px}
+body.phone-p #php{left:8px;right:auto;bottom:calc(158px + env(safe-area-inset-bottom));width:min(42vw,180px);padding:4px 10px;font-size:12px}
+body.phone-p #php span{display:none}
+body.phone-p #bhud{top:58px;padding:3px 12px 4px}body.phone-p #bhud b{font-size:32px}body.phone-p #bhud span{font-size:15px}
+body.phone-p.bonus #obj{top:112px}
+body.phone-l #boss{top:46px;width:min(38vw,360px);padding:4px 10px 5px}body.phone-l .bs-h b{font-size:14px}body.phone-l .bs-bar{height:9px}
+body.phone-l #php{left:calc(14px + env(safe-area-inset-left));right:auto;bottom:124px;width:160px;padding:3px 10px;font-size:11px}
+body.phone-l #php span{display:none}
+body.phone-l #bhud{top:46px;padding:2px 12px 3px}body.phone-l #bhud b{font-size:28px}body.phone-l #bhud span{font-size:14px}
+body.phone-l .panel.ko h2{font-size:28px}body.phone-l .bres .bs{font-size:40px}body.phone-l .bres .brow{margin:6px 0 2px}
+@media (max-width:640px){#boss .bs-h b{font-size:14px}.bres .bs{font-size:44px}}
+
 /* 사람 맞을 때 화면 집중선 */
 #hitlines{position:absolute;inset:0;pointer-events:none;opacity:0;will-change:opacity;background:repeating-conic-gradient(from var(--r,0deg) at var(--x,50%) var(--y,50%),rgba(255,255,255,.9) 0deg 1.3deg,rgba(255,255,255,0) 1.3deg 6.5deg);-webkit-mask-image:radial-gradient(circle at var(--x,50%) var(--y,50%),transparent 0 14%,rgba(0,0,0,.9) 32%,#000 100%);mask-image:radial-gradient(circle at var(--x,50%) var(--y,50%),transparent 0 14%,rgba(0,0,0,.9) 32%,#000 100%)}

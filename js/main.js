@@ -7,8 +7,10 @@ import * as fx from './fx.js';
 import { I, P, CAM, renderPlayer } from './player.js';
 import { MISSIONS, MISSION_IDS, MS, skipStep, canSkip } from './missions.js';
 import { R, title, preview, startCourse, startSingle, startFree, startRush, goFloor, bill, again, fmtClock } from './run.js';
+import { startBonus, bonusQuit, BONUS_LIST, B } from './bonus.js';
 import { tickWorld } from './world.js';
-import { FLOOR_IDS } from './floors.js';
+import { FLOOR_IDS, LOCK, floorLocked, clearedN } from './floors.js';
+import { save } from './save.js';
 import { TOY } from './toys.js';
 import './vox.js';
 import './people.js';
@@ -28,7 +30,7 @@ function resize() {
   document.body.classList.toggle('phone-p', phone && portrait); document.body.classList.toggle('phone-l', phone && !portrait);
 }
 addEventListener('resize', resize);
-const playing = () => R.mode === 'run' || R.mode === 'free' || R.mode === 'finale';
+const playing = () => R.mode === 'run' || R.mode === 'free' || R.mode === 'finale' || R.mode === 'bonus';
 
 // ───── 입력
 const keys = new Set(); let joy = null, paused = false, faked = false;
@@ -40,6 +42,8 @@ addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;
   unlock();
   if (faked) { setFake(false); e.preventDefault(); return; }
+  // 「퇴사 처리…」 창이 떠 있는 동안에는 멈춤 창을 열지 않는다(뒤에 숨어 게임이 멈춘 채로 남는다)
+  if (ui.modal() && (e.code === 'Escape' || e.code === 'KeyP' || e.code === 'KeyB')) { e.preventDefault(); return; }
   if (e.code === 'Escape' || e.code === 'KeyP') return setPause(!paused);
   if (e.code === 'KeyB') return setFake(true);
   if (e.code === 'Tab') { ui.toggleObj(); e.preventDefault(); return; }
@@ -142,11 +146,14 @@ function frame(t) {
 }
 
 Object.assign(ui.act, {
-  course: startCourse, single: startSingle, free: startFree, rush: startRush, goFloor, preview, title, again, clock: fmtClock,
+  course: startCourse, single: startSingle, free: id => startFree(id), rush: () => startRush(), goFloor, preview, title, again, clock: fmtClock,
   pause: () => setPause(!paused),
   canSkip: () => R.mode === 'run' && canSkip(), skip: () => R.mode === 'run' && skipStep(),
-  quit: () => { paused = false; G.userPause = false; ui.pause(false); duckMusic(1); bill(); },
+  // 번외 게임 중 「그만두기」는 청구서 대신 결과 카드
+  quit: () => { paused = false; G.userPause = false; ui.pause(false); duckMusic(1); if (R.mode === 'bonus') bonusQuit(); else bill(); },
   home: () => { paused = false; G.userPause = false; ui.pause(false); duckMusic(1); title(); },
+  bonus: id => { paused = false; G.userPause = false; ui.pause(false); duckMusic(1); startBonus(id); }, bonusList: () => BONUS_LIST, isBonus: () => R.mode === 'bonus',
+  bonusExit: () => { title(); ui.showBonus(); },
 });
 
 async function boot() {
@@ -162,10 +169,19 @@ async function boot() {
   if (location.hash.includes('debug')) {
     window.__boom = {
       G, R, I, P, S, MS, CAM, X, music: musicState,
-      peek: () => ({ mode: R.mode, day: R.i, tick: G.tick, paused: G.paused, mission: MS.m && MS.m.n, step: MS.step ? MS.i + ':' + MS.step.t : MS.phase, clock: fmtClock(G.clock || 0), money: Math.round(G.money), stress: Math.round(G.stress || 0), props: G.props.length, debris: fx.debrisCount(), restocked: Object.values(G.restocked || {}).reduce((a, b) => a + b, 0), seated: !!P.seated, expr: P.expr, cam: CAM.mode, x: P.active ? +P.body.position.x.toFixed(1) : null, z: P.active ? +P.body.position.z.toFixed(1) : null, weapon: P.weapon, calls: X.renderer.info.render.calls, floor: R.mode === 'free' ? R.floor : null, ride: P.ride ? P.ride.kind : null, fuel: P.fuel ? Math.round(P.fuel) : 0, alarm: TOY.alarm, wet: TOY.wet, goals: R.got ? [...R.got] : null }),
+      peek: () => ({ mode: R.mode, day: R.i, tick: G.tick, paused: G.paused, mission: MS.m && MS.m.n, step: MS.step ? MS.i + ':' + MS.step.t : MS.phase, clock: fmtClock(G.clock || 0), money: Math.round(G.money), stress: Math.round(G.stress || 0), props: G.props.length, debris: fx.debrisCount(), restocked: Object.values(G.restocked || {}).reduce((a, b) => a + b, 0), seated: !!P.seated, expr: P.expr, cam: CAM.mode, x: P.active ? +P.body.position.x.toFixed(1) : null, z: P.active ? +P.body.position.z.toFixed(1) : null, weapon: P.weapon, calls: X.renderer.info.render.calls, floor: R.mode === 'free' ? R.floor : null, ride: P.ride ? P.ride.kind : null, fuel: P.fuel ? Math.round(P.fuel) : 0, alarm: TOY.alarm, wet: TOY.wet, goals: R.got ? [...R.got] : null, combat: !!G.combat, hp: P.hp, bonus: B.id ? B.id + ':' + B.phase + ':' + (B.id === 'punch' ? B.best : B.score) : null }),
       step: n => { for (let i = 0; i < n; i++) step(); draw(n / 60); return window.__boom.peek(); },
       single: startSingle, course: startCourse, free: startFree, rush: startRush, go: goFloor, toy: TOY, bill, title,
       set auto(v) { G.auto = v; if (!v) { I.mx = I.mz = 0; I.a = I.b = I.e = I.jump = I.c = false; } }, get auto() { return G.auto; },
+      // 보스전·층 잠금·번외 게임 시험용
+      B, LOCK, people: () => G.people && G.people.list,
+      fight: () => ({ combat: !!G.combat, boss: G.boss ? { ...G.boss, body: undefined, n: undefined } : null, hp: P.hp, maxHp: P.maxHp, ko: !!P.ko, foes: G.people && G.people.list ? G.people.list.length : null, fight: R.fight ? { ...R.fight } : null, beat: !!R.bossBeat, locked: floorLocked('exec'), cleared: clearedN() }),
+      boss: () => { LOCK.open = true; startFree('exec'); return 'exec 보스전 (이번 판만 잠금 해제)'; },
+      unlockAll: () => { S.cleared = S.cleared || {}; FLOOR_IDS.forEach(id => { if (id !== 'exec') S.cleared[id] = true; }); save(); return S.cleared; },
+      relock: () => { S.cleared = {}; save(); LOCK.open = false; return 'locked'; },
+      bonus: id => { startBonus(id || 'car'); return B.id; },
+      ko: () => G.onPlayerKO && G.onPlayerKO(), win: () => G.emit && G.emit('bossdown'),
+      hurt: n => { if (typeof P.hp === 'number') P.hp = Math.max(0, P.hp - (n || 30)); return P.hp; },
     };
   }
 }

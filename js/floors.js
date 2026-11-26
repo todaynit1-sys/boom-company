@@ -3,6 +3,7 @@
 import { resetWorld, solid, GR } from './engine.js';
 import { THREE, X, M, bx, cyl, sph, pl, textMat, labelMat, speckle, tex, setTime, canvasTex, shade, shafts, windowTrim } from './gfx.js';
 import { G } from './state.js';
+import { S } from './save.js';
 import { put, on, hang, beginFloor, elevatorBay, sprinklers, buildOffice, EX } from './world.js';
 
 const PI = Math.PI;
@@ -20,7 +21,7 @@ export const FLOORS = {
     ],
   },
   exec: {
-    lv: '12', n: '임원층', sub: '사장실 · 대회의실 · 비서실', desc: '비싼 건 다 여기 있다. 수족관·도자기·금고', goals: [
+    lv: '12', n: '임원층', sub: '사장실 · 대회의실 · 비서실', desc: '가장 어려운 층. 사장님·비서·경호원과 한판', goals: [
       { id: 'e1', t: '사장님 수족관 깨기', k: 'tag:aquarium' },
       { id: 'e2', t: '회장님 도자기 깨기', k: 'tag:vase' },
       { id: 'e3', t: '사장실 금고 털기', k: 'tag:ceoSafe' },
@@ -93,6 +94,17 @@ export const FLOOR_LINES = {
 export const FLOOR_GREET = { roof: ['나', '옥상이다. 바람 좀 쐬자.'], hall: ['사회자', '3층 대강당입니다. 착석해 주시기 바랍니다.'], party: ['{who}', '왔어? 막내가 고기 구워야지~'], exec: ['비서', '임원층입니다. 사장님 계시니 조용히 다니세요.'], lobby: ['안내 방송', '1층 로비입니다. 오늘도 좋은 하루 되세요.'], parking: ['주차 관리', '지하 2층입니다. 사장님 차 근처는 조심하세요.'] };
 export const floorLv = id => { const lv = FLOORS[id].lv; return lv === 'R' ? '옥상' : /^B/.test(lv) ? lv : lv + '층'; };
 export const floorName = id => FLOORS[id].lv === 'R' ? FLOORS[id].n : floorLv(id) + ' ' + FLOORS[id].n;
+
+// ───── 층 정복과 12층 잠금: 한 층에서 도전과제 4개를 깨면 정복, 다른 층 3곳을 정복하면 임원층(보스전)이 열린다
+export const CLEAR_AT = 4, NEED_CLEAR = 3;
+export const LOCK = { open: false };   // 시험용(#debug): 저장은 그대로 두고 이번 판만 연다
+export const isCleared = id => !!(S.cleared && S.cleared[id]);
+export const clearedN = () => FLOOR_IDS.filter(id => id !== 'exec' && isCleared(id)).length;
+export const floorLocked = id => id === 'exec' && !LOCK.open && clearedN() < NEED_CLEAR;
+export const lockText = () => { const n = Math.min(clearedN(), NEED_CLEAR); return `정복한 층 ${n}/${NEED_CLEAR} — ${NEED_CLEAR - n}개 더`; };
+// 보스전 중에 들리는 말(위자료로 센다)
+export const BOSS_LINES = [['사장님', '내 회사에서 이게 무슨 짓이야!'], ['경호원', '사장님을 보호하라!'], ['비서', '인사팀에 바로 연락하겠습니다!'], ['사장님', '자네, 연봉 동결이야!'], ['경호원', '거기 서십시오!'], ['사장님', '우리 회사는 가족 같은 회사라니까!']];
+export const BOSS_PHASE = { 2: ['사장님', '이제부터 진짜다. 골프채 가져와!'], 3: ['사장님', '이 회사는… 내 거야!'] };
 
 export function buildFloor(id, co, time) {
   if (id === 'exec') return buildExec(co, time);

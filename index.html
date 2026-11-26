@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=41">
+<link rel="stylesheet" href="css/style.css?v=42">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
@@ -57,6 +57,9 @@
   <div id="keys" class="off"></div>
   <div id="alarmfx"></div>
   <div id="elev" class="off"><div class="el-h">엘리베이터<small>어느 층으로 갈까?</small></div><div id="el-btns"></div></div>
+  <div id="boss" class="off"><div class="bs-h"><b id="bs-name">사장님</b><span id="bs-phase"></span><em id="bs-left"></em></div><div class="bs-bar"><div id="bs-hp"></div></div></div>
+  <div id="php" class="off"><span>체력</span><div class="bar"><div id="php-bar"></div></div><b id="php-n">100</b></div>
+  <div id="bhud" class="off"><b id="bh-time">45</b><span id="bh-score"></span></div>
   <div id="fade" class="off"><b id="fade-time"></b><span id="fade-title"></span></div>
 
   <div id="pad" class="off">
@@ -76,7 +79,7 @@
   <div class="logo"><h1><span>회</span><span>사</span> <span>뿌</span><span>시</span><span>기</span></h1><p>출근부터 퇴근까지, 참다가 터뜨린다</p></div>
   <div class="t-btns">
     <button class="btn main" id="b-course">출근하기 <small>출근 · 오전 · 점심 · 오후 · 야근 · 약 9분</small></button>
-    <button class="btn" id="b-rush">1분 난동 <small id="t-rush">60초 기록 도전</small></button>
+    <div class="t-row"><button class="btn" id="b-rush">1분 난동 <small id="t-rush">60초 기록 도전</small></button><button class="btn" id="b-bonus">번외 게임 <small>짧은 판 4개</small></button></div>
     <div class="t-row"><button class="btn" id="b-pick">상황 골라 하기</button><button class="btn" id="b-free">자유 난동 · 층 고르기</button></div>
     <div class="t-row"><button class="btn" id="b-build">회사 설정</button><button class="btn" id="b-chars">캐릭터</button><button class="btn" id="b-book">도감</button></div>
     <div class="rank"><b id="t-rank"></b><div class="bar"><div id="t-rankbar"></div></div><span id="t-total"></span></div>
@@ -91,7 +94,7 @@
 </div></section>
 
 <section id="s-floors" class="scr off"><div class="panel">
-  <h2>어디부터 부술까?</h2><p class="hint">시작할 층을 고르세요. 엘리베이터를 타면 언제든 다른 층으로 가고, 부순 건 층마다 그대로 남아요.</p>
+  <h2>어디부터 부술까?</h2><p class="hint">시작할 층을 고르세요. 엘리베이터를 타면 언제든 다른 층으로 가고, 부순 건 층마다 그대로 남아요. 한 층에서 도전과제 4개를 깨면 그 층은 정복 — 3곳을 정복하면 12층 임원층(보스전)이 열려요.</p>
   <div id="fl-list"></div>
   <div class="p-btns"><button class="btn" id="fl-back">돌아가기</button></div>
 </div></section>
@@ -127,11 +130,23 @@
   <div class="p-btns col"><button class="btn main" id="p-resume">계속하기</button><button class="btn off" id="p-skip">할 일 하나 건너뛰기 <small>다 부숴서 못 하게 됐을 때</small></button><button class="btn" id="p-quit">그만두고 청구서 받기</button><button class="btn" id="p-title">처음으로</button></div>
 </div></section>
 
+<section id="s-ko" class="scr off"><div class="panel narrow ko">
+  <h2>퇴사 처리…</h2><p class="ko-p">사장님께 졌습니다. 짐은 인사팀이 싸 드렸어요.</p><p class="hint" id="ko-sub"></p>
+  <div class="p-btns col"><button class="btn main" id="ko-retry">다시 도전</button><button class="btn" id="ko-leave">나가기 <small>엘리베이터로 다른 층에</small></button></div>
+</div></section>
+
+<section id="s-bonus" class="scr off"><div class="panel">
+  <h2>번외 게임</h2><p class="hint">한 판에 30초~1분. 최고 기록은 이 기기에만 남아요.</p>
+  <div id="bn-list"></div>
+  <div class="p-btns"><button class="btn" id="bn-back">돌아가기</button></div>
+</div></section>
+<section id="s-bres" class="scr off"><div class="panel narrow bres" id="bres"></div></section>
+
 <section id="s-bill" class="scr off"><div class="receipt" id="bill"></div></section>
 <section id="s-fake" class="scr off"><div class="fake"><div class="fk-bar">4분기 실적 집계.xlsx — 표 계산</div><table id="fk-table"></table><p>아무 키나 누르면 돌아갑니다</p></div></section>
 <div id="toast" class="off"></div>
 <div id="goalt" class="off"></div>
 <div id="boot">불러오는 중…</div>
-<script type="module" src="js/main.js?v=41"></script>
+<script type="module" src="js/main.js?v=42"></script>
 </body>
 </html>

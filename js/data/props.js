@@ -303,6 +303,25 @@ export const DEFS = {
     weapon: { n: '부장님 골프채', dmg: 22, r: .95, reach: 1.1, push: 7.5, cd: 260, up: 1.2, snd: 'metal', word: '나이스 샷!' }, build(g) { const c = cyl(g, .01, .01, .95, 'chrome', 0, 0, 0, 6); c.rotation.x = Math.PI / 2; bx(g, .09, .04, .05, 'chrome', .03, -.01, .48, .01); bx(g, .028, .028, .2, 'rubber', 0, 0, -.4); } },
   hammer: { n: '오함마', size: [.24, .12, .95], mass: 5, hp: 9999, price: 0, mat: 'metal', fm: [], frag: 0,
     weapon: { n: '오함마', dmg: 60, r: 1.15, reach: 1.1, push: 9, cd: 620, snd: 'metal', heavy: true }, build(g) { const c = cyl(g, .022, .022, .9, 'wood', 0, 0, -.02, 8); c.rotation.x = Math.PI / 2; bx(g, .24, .11, .12, 'metalDark', 0, 0, .4, .015); } },
+  // 번외 게임: 오락실 펀치 측정기(부서지지 않는다). 점수판은 물건마다 따로 그려서 바꿔 쓴다
+  punchbox: { n: '펀치 측정기', size: [.8, 2.1, .7], mass: 300, hp: 9999, price: 0, mat: 'metal', fm: [], frag: 0, grab: false, fixedOnly: true,
+    onDamage(p, dmg) { p.hp = p.maxHp; p.punch = 0; const u = p.g.userData; u.padT = 14; u.padK = Math.min(1.6, .5 + dmg / 60); },
+    build(g, o, [w, h, d]) {
+      const y0 = -h / 2, u = g.userData, red = colorMat('#c9281f', .45), dk = M('plasticDark');
+      bx(g, w, .95, d, red, 0, y0 + .475, 0, .03); bx(g, w + .02, .1, d + .02, 'hazard', 0, y0 + .9, 0);
+      bx(g, w - .2, .3, .02, 'metalDark', 0, y0 + .45, d / 2 + .005);
+      bx(g, w, h - .95, .2, dk, 0, y0 + .95 + (h - .95) / 2, -d / 2 + .1, .02);
+      pl(g, w - .06, .2, textMat('펀치 측정기', { w: 512, h: 128, size: 76, title: true, bg: '#1b1b1b', fg: '#ffd84d' }), 0, h / 2 - .14, -d / 2 + .205);
+      const draw = (c, W, H, big, small, col) => { c.fillStyle = '#0b0d10'; c.fillRect(0, 0, W, H); c.strokeStyle = '#2a2f36'; c.lineWidth = 4; c.strokeRect(2, 2, W - 4, H - 4); c.textAlign = 'center'; c.fillStyle = col || '#ff5247'; c.font = '700 64px ' + FONT; c.fillText(big, W / 2, H * .6); c.fillStyle = '#ffd84d'; c.font = '700 20px ' + FONT; c.fillText(small, W / 2, H * .9); };
+      const t = canvasTex(256, 128, (c, W, H) => draw(c, W, H, 'PUNCH', '세게 치세요!')), cx = t.image.getContext('2d');
+      u.show = (big, small, col) => { draw(cx, 256, 128, big, small, col); t.needsUpdate = true; };
+      pl(g, w - .14, (w - .14) / 2, new THREE.MeshBasicMaterial({ map: t }), 0, h / 2 - .52, -d / 2 + .205);
+      for (const s of [-1, 1]) for (let i = 0; i < 4; i++) sph(g, .025, 'alarmLamp', s * (w / 2 - .06), h / 2 - .32 - i * .12, -d / 2 + .21);
+      // 때리는 쿠션: 팔에 매달려 맞으면 뒤로 젖혀진다
+      const pad = u.pad = new THREE.Group(); pad.position.set(0, y0 + 1.55, -d / 2 + .2); g.add(pad);
+      rot(bx(pad, .06, .06, .3, 'chrome', 0, 0, .15), 0); const cu = cyl(pad, .17, .17, .14, red, 0, -.02, .36, 20); cu.rotation.x = Math.PI / 2;
+      const face = cyl(pad, .14, .14, .02, 'white', 0, -.02, .44, 20); face.rotation.x = Math.PI / 2;
+    } },
   // 파편·투사체
   frag: { n: '파편', size: [.1, .1, .1], mass: .4, kind: 'frag', mat: 'plastic', build() { } },
   ball: { n: '골프공', size: [.07, .07, .07], mass: .3, kind: 'frag', mat: 'plastic', sphere: true, build(g) { sph(g, .035, 'white'); } },
