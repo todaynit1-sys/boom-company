@@ -28,6 +28,9 @@ function noise(dur, vol, ftype, freq, q = 1, delay = 0, f1 = 0) {
 }
 const R = () => Math.random();
 const SFX = {
+  // 사람 때릴 때: 짝 갈라지는 소리 + 퍽 몸통 + 낮은 울림
+  smack(v, p) { noise(.035, v * .55, 'highpass', 2600 * p); noise(.07, v * .45, 'bandpass', 1100 * p, 1.2, 0, 500); tone(190 * p, 50 * p, .14, v * .7); tone(70, 40, .18, v * .5, 'sine', .01); },
+  thud(v, p) { tone(85 * p, 38, .22, v * .75); noise(.18, v * .4, 'lowpass', 420 * p, 1, 0, 120); },
   punch(v, p) { tone(150 * p, 60 * p, .08, v * .5); noise(.04, v * .25, 'lowpass', 1800); },
   whoosh(v, p) { noise(.12, v * .12, 'bandpass', 900 * p, 1.5, 0, 300); },
   glass(v, p) { noise(.25, v * .3, 'highpass', 3000); for (let i = 0; i < 5; i++) { const f = (2000 + R() * 4000) * p; tone(f, f * .9, .06 + R() * .1, v * .1, 'sine', i * .02); } },

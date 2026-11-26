@@ -269,3 +269,6 @@ body.phone-l #obj{top:62px}body.phone-l .h-left{max-width:30vw}
 body.phone-l .h-left,body.phone-l .h-right{padding:4px 10px 5px}body.phone-l #obj,body.phone-l #elev{top:70px}
 body.phone-p #status{bottom:200px}
 .h-left{flex:0 0 auto;max-width:42vw}
+
+/* 사람 맞을 때 화면 집중선 */
+#hitlines{position:absolute;inset:0;pointer-events:none;opacity:0;will-change:opacity;background:repeating-conic-gradient(from var(--r,0deg) at var(--x,50%) var(--y,50%),rgba(255,255,255,.9) 0deg 1.3deg,rgba(255,255,255,0) 1.3deg 6.5deg);-webkit-mask-image:radial-gradient(circle at var(--x,50%) var(--y,50%),transparent 0 14%,rgba(0,0,0,.9) 32%,#000 100%);mask-image:radial-gradient(circle at var(--x,50%) var(--y,50%),transparent 0 14%,rgba(0,0,0,.9) 32%,#000 100%)}

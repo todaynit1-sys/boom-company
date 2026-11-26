@@ -1,8 +1,9 @@
 // 때릴 수 있는 사람들(부장님·사장님…). 서 있을 때는 물건만 부딪히는 몸이고, 맞으면 물리로 날아간다.
 // 피는 없고, 잠깐 뻗었다가 다시 일어나 도망 다닌다.
-import { X } from './gfx.js';
+import { X, THREE } from './gfx.js';
 import { G, rand, pick, clamp, won, angLerp } from './state.js';
-import { PH, GR, CANNON, addCombo } from './engine.js';
+import { PH, GR, CANNON, addCombo, slow } from './engine.js';
+import { pow, dizzyStars, spinStars } from './hitfx.js';
 import { buildRig, poseRig, faceTex, seatOf, P } from './player.js';
 import { NPCS } from './data/chars.js';
 import * as fx from './fx.js';
@@ -12,7 +13,7 @@ const list = [], rigs = {};
 const CAST = { office: ['bujang', 'timjang', 'insa'], exec: ['sajang', 'sangmu'], lobby: ['gap', 'insa'], hall: ['sajang', 'bujang', 'timjang'], party: ['bujang', 'sangmu'], roof: ['bujang', 'timjang'], parking: ['gap', 'sangmu'] };
 const OW = ['으악!', '아이고!', '내 허리!', '왜 나한테!', '인사팀 불러!', '컥!', '살려 줘!'];
 const BEG = ['자, 잠깐만!', '말로 하자고!', '내가 잘못했네!', '연봉 올려 줄게!', '오지 마!'];
-const HY = .84, lv = new CANNON.Vec3(), wv = new CANNON.Vec3();
+const HY = .84, lv = new CANNON.Vec3(), wv = new CANNON.Vec3(), hv = new THREE.Vector3();
 
 // 그 자리에 물건·벽이 있는지(사람 키 높이만 본다)
 function blocked(x, z, rad) {
@@ -51,7 +52,9 @@ export function spawnPeople(floor, avoid = []) {
   for (const id of cast) {
     const wi = WORKERS.indexOf(id), chair = wi >= 0 ? sit[wi] : null, so = chair && seatOf(chair);
     const pt = so ? { x: so.x, z: so.z } : freeSpot(avoid); if (!pt) continue;
-    const R = rigs[id] || (rigs[id] = buildRig(id, null, NPCS[id].g)); X.scene.add(R.root); R.root.visible = true; R.shown = null;
+    const R = rigs[id] || (rigs[id] = buildRig(id, null, NPCS[id].g));
+    if (!R.mats) { R.mats = []; R.base = R.root.scale.clone(); const cl = new Map(); R.root.traverse(o => { if (o.isMesh && o.material && o.material.emissive) { let c = cl.get(o.material); if (!c) { c = o.material.clone(); cl.set(o.material, c); R.mats.push(c); } o.material = c; } }); }
+    X.scene.add(R.root); R.root.visible = true; R.shown = null;
     const body = new CANNON.Body({ mass: 0, type: CANNON.Body.KINEMATIC, material: PH.matD, allowSleep: false, linearDamping: .08, angularDamping: .35, collisionFilterGroup: GR.NPC, collisionFilterMask: GR.PROP | GR.FRAG | GR.FORK });
     body.addShape(new CANNON.Box(new CANNON.Vec3(.24, .82, .17)));
     const n = { id, d: NPCS[id], R, body, yaw: rand(6.28), st: 'idle', t: 0, walk: 0, spd: 0, hits: 0, kt: -99, think: rand(60, 200) | 0, nagT: rand(200, 500) | 0, scared: 0, tgt: null, pend: null, out: false };
@@ -62,41 +65,58 @@ export function spawnPeople(floor, avoid = []) {
       if (ob.p && ob.p.kind === 'frag') return;
       const v = ob.velocity, sp = v.length(); if (sp < 3.2 || sp * Math.sqrt(ob.mass || 1) < 8) return; n.pend = [v.x * .9, 3 + sp * .3, v.z * .9];
     });
+    // 날아가다 바닥·벽에 부딪히면 쿵(물리 계산 중이라 적어 두었다가 tick에서 처리)
+    body.addEventListener('collide', e => { if (n.st !== 'fly' || n.t < 6) return; const v = Math.abs(e.contact.getImpactVelocityAlongNormal()); if (v > 3.5 && G.tick - (n.lt || -99) > 10) { n.lt = G.tick; n.land = Math.max(n.land || 0, v); } });
+    n.stars = dizzyStars();
     PH.world.addBody(body); list.push(n);
   }
 }
 function head(n) { const p = n.body.position; return { x: p.x, y: p.y + 1.25, z: p.z }; }
 
-function knock(n, vx, vy, vz) {
-  const air = n.st === 'fly' || n.st === 'down';
+function flash(n, k) { for (const m of n.R.mats) m.emissive.setRGB(k, k, k); }
+function squash(n) { const s = n.sq / 10, e = .3 * s * Math.cos((1 - s) * Math.PI * 3), B = n.R.base; n.R.root.scale.set(B.x * (1 + e), B.y * (1 - e * .9), B.z * (1 + e)); }
+function knock(n, vx, vy, vz, from) {
+  const air = n.st === 'fly' || n.st === 'down', wasFly = n.st === 'fly';
   if (air && G.tick - n.kt < 10) return false;
   const b = n.body; n.kt = G.tick; n.hits++; n.tgt = null;
   n.chair = null;
   if (!air) { b.type = CANNON.Body.DYNAMIC; b.mass = 55; b.updateMassProperties(); b.collisionFilterMask = GR.STATIC | GR.PROP | GR.FRAG | GR.FORK; }
   b.wakeUp(); b.velocity.set(clamp(vx, -16, 16), clamp(vy, 2.5, 13), clamp(vz, -16, 16)); b.angularVelocity.set(rand(-9, 9), rand(-4, 4), rand(-9, 9));
   n.st = 'fly'; n.t = 0; face(n, 'endure');
-  const bp = b.position, gain = (air ? 150000 : 300000) * G.mult;
+  n.jug = wasFly ? (n.jug || 1) + 1 : 1;
+  const bp = b.position, gain = (air ? 150000 : 300000) * (1 + (Math.min(n.jug, 5) - 1) * .5) * G.mult, pw = clamp(Math.hypot(vx, vz) / 9, .6, 1.7);
   G.money += gain; G.rage = Math.min(100, G.rage + 4); addCombo(1);
   const c = G.counts.npc || (G.counts.npc = { n: 0, sum: 0, name: '때린 사람(합의금)' }); c.n++; c.sum += gain;
-  fx.text(head(n), air ? '한 번 더!' : pick(OW), 'word' + (air ? '' : ' big')); fx.text({ x: bp.x, y: bp.y + .9, z: bp.z }, '합의금 +' + won(gain), 'money');
-  fx.burst(bp, .5, true); fx.bitsAt(bp, 10, '#ffd84d', 4, 3);
-  sfx('punch', 1); sfx('boom', .35); buzz(40); G.shake = Math.max(G.shake, .14); if (!air) G.hitstop = Math.max(G.hitstop, 45);
+  fx.text(head(n), n.jug > 1 ? n.jug + '연타!' + (n.jug >= 3 ? '!' : '') : pick(OW), 'word' + (n.jug === 2 || (air && n.jug < 2) ? '' : ' big')); fx.text({ x: bp.x, y: bp.y + .9, z: bp.z }, '합의금 +' + won(gain), 'money');
+  // 맞은 자리: 때린 쪽으로 조금 나온 가슴 높이
+  let cx = bp.x, cz = bp.z, cy = bp.y + .35;
+  if (from) { const dx = from.x - bp.x, dz = from.z - bp.z, l = Math.hypot(dx, dz) || 1; cx += dx / l * .28; cz += dz / l * .28; cy = clamp(from.y, bp.y - .1, bp.y + .7); }
+  const cp = { x: cx, y: cy, z: cz };
+  pow(cp, { x: vx, z: vz }, pw + (n.jug >= 3 ? .4 : 0));
+  fx.burst(cp, .45 * pw, !air); fx.bitsAt(cp, 12, '#ffffff', 6 * pw, 2); fx.bitsAt(cp, 10, '#ffd84d', 4, 3); fx.bitsAt(head(n), 6, '#bfe6ff', 2.4, 3);
+  // 맞은 사람: 하얗게 번쩍이고 납작하게 찌그러졌다 튕긴다
+  n.fl = 5; flash(n, 1); n.sq = 10; squash(n);
+  sfx('smack', 1); sfx('boom', .22 * pw); buzz(air ? 25 : 45);
+  G.shake = Math.max(G.shake, .1 + .06 * pw); if (!air) G.hitstop = Math.max(G.hitstop, 60 + 45 * pw); else G.hitstop = Math.max(G.hitstop, 45);
+  // 공중 3연타부터는 잠깐 느리게
+  if (n.jug >= 3 && !G.calm) { if (!(G.timeScale < 1 && G.slowUntil - G.real > 26)) slow(.35, 26); G.flash = Math.max(G.flash || 0, 3); }
   G.emit && G.emit('npc');
   return true;
 }
 // 주먹·발차기·무기·내려찍기
 function hit(c, r, imp, opt = {}) {
   let k = 0;
+  const me = P.active && P.body ? P.body.position : null, src = me && Math.hypot(me.x - c.x, me.z - c.z) < 1.6 ? { x: me.x, y: c.y, z: me.z } : c;
   for (const n of list) {
     const bp = n.body.position, dx = bp.x - c.x, dz = bp.z - c.z, d = Math.hypot(dx, dz); if (d > r + .35 || Math.abs(bp.y - c.y) > 1.5) continue;
     const l = d || 1, h = Math.hypot(imp.x, imp.z);
-    if (opt.radial) { if (knock(n, dx / l * imp.x * 1.3, imp.y + 2.5, dz / l * imp.x * 1.3)) k++; }
-    else if (knock(n, imp.x * 1.3 + dx / l * h * .2, imp.y * 1.1 + 2.5, imp.z * 1.3 + dz / l * h * .2)) k++;
+    if (opt.radial) { if (knock(n, dx / l * imp.x * 1.3, imp.y + 2.5, dz / l * imp.x * 1.3, src)) k++; }
+    else if (knock(n, imp.x * 1.3 + dx / l * h * .2, imp.y * 1.1 + 2.5, imp.z * 1.3 + dz / l * h * .2, src)) k++;
   }
   return k;
 }
 function blast(c, r, push) {
-  for (const n of list) { const bp = n.body.position, dx = bp.x - c.x, dz = bp.z - c.z, d = Math.hypot(dx, bp.y - c.y, dz); if (d > r) continue; const k = (1 - d / r * .6) * push * 1.2, l = Math.hypot(dx, dz) || 1; knock(n, dx / l * k, 3 + k * .7, dz / l * k); }
+  for (const n of list) { const bp = n.body.position, dx = bp.x - c.x, dz = bp.z - c.z, d = Math.hypot(dx, bp.y - c.y, dz); if (d > r) continue; const k = (1 - d / r * .6) * push * 1.2, l = Math.hypot(dx, dz) || 1; knock(n, dx / l * k, 3 + k * .7, dz / l * k, c); }
 }
 
 function tick(dt) {
@@ -105,6 +125,15 @@ function tick(dt) {
   for (const n of list) {
     const b = n.body, bp = b.position, R = n.R; n.t++;
     if (n.pend) { const v = n.pend; n.pend = null; knock(n, v[0], v[1], v[2]); }
+    if (n.fl > 0) { n.fl--; flash(n, n.fl / 5); }
+    if (n.sq > 0) { n.sq--; squash(n); }
+    if (n.land) {
+      const v = n.land; n.land = 0;
+      fx.cloud({ x: bp.x, y: .15, z: bp.z }, v > 7 ? 4 : 2, '#d8d0bf', .6, .4); fx.bitsAt({ x: bp.x, y: .1, z: bp.z }, 8, '#9a9286', 2.5, 1.5);
+      sfx('thud', Math.min(1, v / 9)); G.shake = Math.max(G.shake, Math.min(.16, v * .018));
+      if (v > 7) { fx.text({ x: bp.x, y: bp.y + .6, z: bp.z }, pick(['쿵!', '콰당!', '철퍼덕!']), 'word'); buzz(20); }
+    }
+    if (n.st === 'down' || n.st === 'dizzy') { R.head.getWorldPosition(hv); spinStars(n.stars, hv.x, hv.y + .32, hv.z, G.tick); } else if (n.stars.visible) n.stars.visible = false;
     if (n.st === 'fly') {
       if (!n.out && oz && (Math.abs(bp.x) > oz.x || bp.z < oz.z0 || bp.y < -3)) {
         n.out = true; const gain = 5000000 * G.mult; G.money += gain; addCombo(3);
@@ -112,7 +141,7 @@ function tick(dt) {
         fx.text({ x: clamp(bp.x, -13, 13), y: 2.3, z: clamp(bp.z, -8.6, 8.6) }, '창밖으로 ' + n.d.n + '! +' + won(gain), 'money'); sfx('up', .8); G.emit && G.emit('npcout');
       }
       if (bp.y < -8 || n.t > 480) { n.out = false; n.yaw = Math.PI; stand(n, clamp(bp.y < -3 ? -3.5 + rand(-1.5, 1.5) : bp.x, -12.5, 12.5), bp.y < -3 ? 6.6 : clamp(bp.z, -8, 7.8)); n.st = 'dizzy'; n.t = 0; n.scared = 900; }
-      else if (n.t > 40 && b.velocity.lengthSquared() < .3 && b.angularVelocity.lengthSquared() < 1) { n.st = 'down'; n.t = 0; }
+      else if (n.t > 40 && b.velocity.lengthSquared() < .3 && b.angularVelocity.lengthSquared() < 1) { n.st = 'down'; n.t = 0; n.jug = 0; }
     } else if (n.st === 'down') {
       if (n.t === 30) fx.text(head(n), '@_@', 'word');
       if (n.t > 120) { n.out = false; stand(n, clamp(bp.x, -12.6, 12.6), clamp(bp.z, -8.1, 7.8)); n.st = 'dizzy'; n.t = 0; n.scared = 900; }
@@ -159,5 +188,5 @@ function tick(dt) {
     poseRig(R, { walk: n.walk, speed: clamp(n.spd / 5.5, 0, 1.2), air: n.st === 'fly', t: G.tick / 60, seated: n.st === 'sit', typing: n.st === 'sit' });
   }
 }
-function reset() { for (const n of list) { if (n.R.root.parent) n.R.root.parent.remove(n.R.root); if (PH.world && n.body.world) PH.world.removeBody(n.body); } list.length = 0; }
+function reset() { for (const n of list) { if (n.R.root.parent) n.R.root.parent.remove(n.R.root); if (n.stars) X.scene.remove(n.stars); if (n.R.mats) { for (const m of n.R.mats) m.emissive.setRGB(0, 0, 0); n.R.root.scale.copy(n.R.base); } if (PH.world && n.body.world) PH.world.removeBody(n.body); } list.length = 0; }
 G.people = { hit, blast, tick, reset, list };

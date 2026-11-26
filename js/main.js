@@ -1,6 +1,7 @@
 import { G } from './state.js';
 import { S } from './save.js';
 import { X, initGfx, resizeGfx, render, highlight } from './gfx.js';
+import { initHitfx, hitFrame } from './hitfx.js';
 import { tick } from './engine.js';
 import * as fx from './fx.js';
 import { I, P, CAM, renderPlayer } from './player.js';
@@ -130,7 +131,7 @@ function floatPrompt(hc) {
   }
   if (floated) { promptEl.style.left = promptEl.style.top = promptEl.style.bottom = promptEl.style.transform = ''; floated = false; }
 }
-function draw(dt) { renderPlayer(dt); const hc = P.active && !G.paused && R.mode !== 'title' ? (P.cand && !P.cand.dead ? P.cand : G.want && !G.want.dead && !G.want.held ? G.want : null) : null; highlight(hc ? hc.g : null); let pt = hc; if (ui.promptBusy()) { pt = null; try { const a = MS.step && MS.step.at && MS.step.at(); if (a && a.body && !a.dead) pt = a; } catch (e) { } } floatPrompt(pt); render(); fx.drawTexts(W, H); flashEl.style.opacity = G.flash > 0 && !G.calm ? Math.min(.7, G.flash / 8) : 0; }
+function draw(dt) { renderPlayer(dt); hitFrame(dt); const hc = P.active && !G.paused && R.mode !== 'title' ? (P.cand && !P.cand.dead ? P.cand : G.want && !G.want.dead && !G.want.held ? G.want : null) : null; highlight(hc ? hc.g : null); let pt = hc; if (ui.promptBusy()) { pt = null; try { const a = MS.step && MS.step.at && MS.step.at(); if (a && a.body && !a.dead) pt = a; } catch (e) { } } floatPrompt(pt); render(); fx.drawTexts(W, H); flashEl.style.opacity = G.flash > 0 && !G.calm ? Math.min(.7, G.flash / 8) : 0; }
 function frame(t) {
   const dt = Math.min(100, t - lastT); lastT = t;
   // 한 번 틀려도 게임이 멈추지 않게: 오류는 기록만 하고 다음 틱으로 넘어간다
@@ -151,7 +152,7 @@ Object.assign(ui.act, {
 async function boot() {
   G.mobile = matchMedia('(pointer:coarse)').matches; G.calm = S.calm || matchMedia('(prefers-reduced-motion:reduce)').matches;
   try { await Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 1500))]); } catch (e) { }
-  initGfx(cv); fx.initFx(); resize();
+  initGfx(cv); fx.initFx(); initHitfx(); resize();
   ui.init(MISSIONS, MISSION_IDS);
   // 가구 모델: 5초 안에 못 받으면 예전 모양으로 시작한다
   try { await Promise.race([loadModels(), new Promise(r => setTimeout(r, 5000))]); } catch (e) { }
